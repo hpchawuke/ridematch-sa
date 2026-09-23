@@ -10,6 +10,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.8",
     "react-icons": "^5.7.0",
@@ -28,5 +29,9 @@
   "engines": {
     "node": ">=20",
     "npm": ">=10"
+  },
+  "allowScripts": {
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.6": true
   }
 }

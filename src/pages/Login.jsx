@@ -9,24 +9,49 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("Logged in:", userCredential.user.email);
       navigate('/home');
-    } catch (error) {
-      console.error("Login error:", error.message);
+    } catch (err) {
+      console.error("Login error:", err.code, err.message);
+
+      // Map Firebase error codes to friendly messages
       let message = "Login failed. Please try again.";
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-        message = "Invalid email or password.";
-      } else if (error.code === 'auth/user-not-found') {
-        message = "No account found with that email.";
+      switch (err.code) {
+        case 'auth/invalid-email':
+          message = "That email address doesn't look right.";
+          break;
+        case 'auth/user-disabled':
+          message = "This account has been disabled.";
+          break;
+        case 'auth/user-not-found':
+          message = "No account found with that email.";
+          break;
+        case 'auth/wrong-password':
+        case 'auth/invalid-credential':
+          message = "Invalid email or password.";
+          break;
+        case 'auth/too-many-requests':
+          message = "Too many attempts. Try again in a few minutes.";
+          break;
+        case 'auth/network-request-failed':
+          message = "Network error. Check your connection.";
+          break;
+        case 'auth/operation-not-allowed':
+          message = "Email/password login is disabled. Enable it in Firebase Console.";
+          break;
+        default:
+          message = err.message;
       }
-      alert(message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -45,28 +70,37 @@ const Login = () => {
       <form className="flex flex-col gap-4" onSubmit={handleLogin}>
         <div className="flex items-center border border-gray-200 rounded-xl px-4 focus-within:border-[#0A7B44] bg-white">
           <FaEnvelope className="text-gray-400 mr-3" />
-          <input 
-            type="email" 
-            placeholder="Email Address" 
+          <input
+            type="email"
+            placeholder="Email Address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full py-4 outline-none text-sm" 
-            required 
+            className="w-full py-4 outline-none text-sm"
+            required
           />
         </div>
+
         <div className="flex items-center border border-gray-200 rounded-xl px-4 focus-within:border-[#0A7B44] bg-white">
           <FaLock className="text-gray-400 mr-3" />
-          <input 
-            type="password" 
-            placeholder="Password" 
+          <input
+            type="password"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full py-4 outline-none text-sm" 
-            required 
+            className="w-full py-4 outline-none text-sm"
+            required
           />
         </div>
-        <button 
-          type="submit" 
+
+        {/* Inline error — replaces the alert() */}
+        {error && (
+          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
           disabled={loading}
           className="w-full py-4 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors mt-2 disabled:opacity-60"
         >
