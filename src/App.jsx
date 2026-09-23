@@ -8,7 +8,7 @@ import Signup from './pages/Signup';
 import Login from './pages/Login';
 import VerifyEmail from './pages/VerifyEmail';
 import Home from './pages/Home';
-import PassengerHome from './pages/PassengerHome';
+import PassengerHome from './pages/PassangerHome';
 import DriverHome from './pages/DriverHome';
 
 function ProtectedRoute({ children }) {
