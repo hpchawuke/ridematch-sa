@@ -30,7 +30,7 @@ const Home = () => {
 
   const firstName = profile?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const isDriver = profile?.userType === 'Driver';
-  const isVerified = profile?.verified === true;
+  const isVerified = user?.emailVerified === true;
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 overflow-y-auto">

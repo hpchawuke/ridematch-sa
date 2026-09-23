@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FaArrowLeft, FaUser, FaEnvelope, FaPhone, FaLock } from 'react-icons/fa6';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { FaArrowLeft, FaUser, FaEnvelope, FaPhone, FaLock, FaCircleCheck } from 'react-icons/fa6';
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
@@ -18,6 +18,9 @@ const Signup = () => {
     confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
+  const [showVerifyScreen, setShowVerifyScreen] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -45,7 +48,10 @@ const Signup = () => {
       // 2. Set the display name on the auth user
       await updateProfile(user, { displayName: formData.fullName });
 
-      // 3. Save the user profile in Firestore
+      // 3. Send the verification email
+      await sendEmailVerification(user);
+
+      // 4. Save the user profile in Firestore
       await setDoc(doc(db, "users", user.uid), {
         fullName: formData.fullName,
         email: formData.email,
@@ -57,8 +63,8 @@ const Signup = () => {
 
       console.log("User created:", user.uid);
 
-      // 4. Redirect to home — THE LINE THAT WAS MISSING
-      navigate('/home');
+      // 5. Show the verification screen instead of redirecting
+      setShowVerifyScreen(true);
 
     } catch (error) {
       console.error("Signup error:", error.code, error.message);
@@ -68,6 +74,91 @@ const Signup = () => {
     }
   };
 
+  const handleResendEmail = async () => {
+    setResending(true);
+    setResendMessage('');
+    try {
+      if (auth.currentUser) {
+        await sendEmailVerification(auth.currentUser);
+        setResendMessage("Verification email resent!");
+      }
+    } catch (error) {
+      setResendMessage(`Error: ${error.message}`);
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    try {
+      if (!auth.currentUser) return;
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        // Email is verified — let them in
+        navigate('/home');
+      } else {
+        alert("Email not verified yet. Please check your inbox and click the link.");
+      }
+    } catch (error) {
+      console.error("Error checking verification:", error);
+      alert("Could not check verification status. Try again.");
+    }
+  };
+
+  // ============================================
+  // VERIFICATION SCREEN
+  // ============================================
+  if (showVerifyScreen) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white text-center">
+        <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-6">
+          <FaCircleCheck className="text-4xl text-[#0A7B44]" />
+        </div>
+
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          Verify Your Email
+        </h2>
+        <p className="text-sm text-gray-500 mb-2">
+          We've sent a verification link to:
+        </p>
+        <p className="text-sm font-semibold text-gray-800 mb-6">
+          {formData.email}
+        </p>
+
+        <p className="text-xs text-gray-500 mb-8 max-w-xs">
+          Click the link in the email to verify your account. Once verified,
+          press the button below to continue.
+        </p>
+
+        <button
+          onClick={handleCheckVerification}
+          className="w-full max-w-xs py-4 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors mb-3"
+        >
+          I've Verified My Email
+        </button>
+
+        <button
+          onClick={handleResendEmail}
+          disabled={resending}
+          className="w-full max-w-xs py-3 rounded-xl font-medium text-[#0A7B44] border border-[#0A7B44] hover:bg-green-50 transition-colors disabled:opacity-60"
+        >
+          {resending ? 'Resending...' : 'Resend Email'}
+        </button>
+
+        {resendMessage && (
+          <p className="text-xs text-gray-600 mt-4">{resendMessage}</p>
+        )}
+
+        <p className="text-xs text-gray-400 mt-8">
+          Didn't get the email? Check your spam folder.
+        </p>
+      </div>
+    );
+  }
+
+  // ============================================
+  // SIGN-UP FORM
+  // ============================================
   return (
     <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-white">
       <div className="relative mb-6 pt-2">
