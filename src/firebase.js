@@ -3,12 +3,12 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDXR5tuULULUIGVuoYSfbfLEt-iwEPX88",
+  apiKey: "AIzaSyDXR5TuUlLUlUIGVuoYSfbfLEt-iwEPX88",
   authDomain: "ridematch-sa.firebaseapp.com",
   projectId: "ridematch-sa",
   storageBucket: "ridematch-sa.firebasestorage.app",
   messagingSenderId: "674110146905",
-  appId: "1:674110146905:web:59d159dd2c739f6cee448",
+  appId: "1:674110146905:web:590d159dd2c739f6cee448",
   measurementId: "G-5LNJJ6W507"
 };
 
