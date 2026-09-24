@@ -7,6 +7,7 @@ import UserType from './pages/UserType';
 import Signup from './pages/Signup';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Profile from './pages/Profile'; // Make sure this file exists in ./pages/
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -23,6 +24,8 @@ function AppRoutes() {
         <Route path="/user-type" element={<UserType />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+        
+        {/* Home Route */}
         <Route
           path="/home"
           element={
@@ -31,6 +34,17 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+
+        {/* --- NEW PROFILE ROUTE --- */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
       </Routes>
     </Layout>
   );

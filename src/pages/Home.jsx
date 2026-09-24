@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import {
   FaRightFromBracket, FaLocationDot, FaMagnifyingGlassLocation,
   FaCar, FaWallet, FaClockRotateLeft, FaBell, FaToggleOn, FaToggleOff,
-  FaUser, FaPhone, FaCircleCheck, FaTriangleExclamation
+  FaUser, FaPhone, FaCircleCheck, FaTriangleExclamation,
+  FaBars, FaHouse, FaMagnifyingGlass, FaCalendarDays, FaCarSide
 } from 'react-icons/fa6';
 import { auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { useState } from 'react';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -33,49 +33,101 @@ const Home = () => {
   const isVerified = user?.emailVerified === true;
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50 overflow-y-auto">
-      {/* Header */}
-      <div className="bg-[#0A7B44] text-white px-6 pt-6 pb-8 rounded-b-3xl">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="text-sm text-green-100">Welcome back,</p>
-            <h1 className="text-2xl font-bold">{firstName} 👋</h1>
+    <div className="flex-1 flex flex-col bg-gray-50 h-screen relative">
+      
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto pb-20">
+        
+        {/* Header */}
+        <div className="bg-[#0A7B44] text-white px-6 pt-6 pb-8 rounded-b-3xl">
+          <div className="flex items-center justify-between mb-6">
+            
+            {/* Hamburger Menu (Left) */}
+            <button className="p-2 -ml-2 rounded-full hover:bg-white/15 transition-colors">
+              <FaBars className="text-xl" />
+            </button>
+
+            {/* Welcome Text (Center) */}
+            <div className="text-center flex-1">
+              <p className="text-xs text-green-100">Welcome back,</p>
+              <h1 className="text-xl font-bold">{firstName} 👋</h1>
+            </div>
+
+            {/* Logout (Right) */}
+            <button
+              onClick={handleLogout}
+              className="p-2 -mr-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
+              title="Log out"
+            >
+              <FaRightFromBracket />
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
-            title="Log out"
+
+          {/* Verification banner */}
+          {!isVerified && (
+            <div className="flex items-start gap-2 bg-yellow-400/20 border border-yellow-300/40 rounded-xl px-3 py-2 text-xs">
+              <FaTriangleExclamation className="mt-0.5 flex-shrink-0" />
+              <span>Your account isn't verified yet. Verify to start {isDriver ? 'accepting rides' : 'booking rides'}.</span>
+            </div>
+          )}
+        </div>
+
+        {/* Main content */}
+        <div className="px-6 -mt-4">
+          {isDriver ? <DriverHome isOnline={isOnline} setIsOnline={setIsOnline} /> : <PassengerHome />}
+        </div>
+
+        {/* Profile summary */}
+        <div className="px-6 mt-6 mb-8">
+          <h2 className="text-sm font-semibold text-gray-500 mb-3">ACCOUNT</h2>
+          <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+            <Row icon={<FaUser />} label="Name" value={profile?.fullName || '—'} />
+            <Row icon={<FaPhone />} label="Phone" value={profile?.phone || '—'} />
+            <Row
+              icon={<FaCircleCheck className={isVerified ? 'text-green-500' : 'text-gray-300'} />}
+              label="Verified"
+              value={isVerified ? 'Yes' : 'No'}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* --- BOTTOM NAVIGATION BAR --- */}
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-between items-center px-6 py-2 pb-safe">
+        
+        {/* Home (Active) */}
+        <button className="flex flex-col items-center gap-1 text-[#0A7B44]">
+          <FaHouse className="text-xl" />
+          <span className="text-[10px] font-medium">Home</span>
+        </button>
+
+        {/* Search */}
+        <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-gray-600">
+          <FaMagnifyingGlass className="text-xl" />
+          <span className="text-[10px]">Search</span>
+        </button>
+
+        {/* Post Ride */}
+        <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-gray-600">
+          <FaCarSide className="text-xl" />
+          <span className="text-[10px]">Post Ride</span>
+        </button>
+
+        {/* Bookings */}
+        <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-gray-600">
+          <FaCalendarDays className="text-xl" />
+          <span className="text-[10px]">Bookings</span>
+        </button>
+
+        {/* Profile */}
+         <button 
+            onClick={() => navigate('/Profile')} 
+            className="flex flex-col items-center gap-1 text-gray-400 hover:text-gray-600"
           >
-            <FaRightFromBracket />
+            <FaUser className="text-xl" />
+            <span className="text-[10px]">Profile</span>
           </button>
-        </div>
 
-        {/* Verification banner */}
-        {!isVerified && (
-          <div className="flex items-start gap-2 bg-yellow-400/20 border border-yellow-300/40 rounded-xl px-3 py-2 text-xs">
-            <FaTriangleExclamation className="mt-0.5 flex-shrink-0" />
-            <span>Your account isn't verified yet. Verify to start {isDriver ? 'accepting rides' : 'booking rides'}.</span>
-          </div>
-        )}
-      </div>
-
-      {/* Main content */}
-      <div className="px-6 -mt-4">
-        {isDriver ? <DriverHome isOnline={isOnline} setIsOnline={setIsOnline} /> : <PassengerHome />}
-      </div>
-
-      {/* Profile summary */}
-      <div className="px-6 mt-6 mb-8">
-        <h2 className="text-sm font-semibold text-gray-500 mb-3">ACCOUNT</h2>
-        <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-          <Row icon={<FaUser />} label="Name" value={profile?.fullName || '—'} />
-          <Row icon={<FaPhone />} label="Phone" value={profile?.phone || '—'} />
-          <Row
-            icon={<FaCircleCheck className={isVerified ? 'text-green-500' : 'text-gray-300'} />}
-            label="Verified"
-            value={isVerified ? 'Yes' : 'No'}
-          />
-        </div>
       </div>
     </div>
   );
