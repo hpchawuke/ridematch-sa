@@ -6,13 +6,16 @@ import Splash from './pages/Splash';
 import UserType from './pages/UserType';
 import Signup from './pages/Signup';
 import Login from './pages/Login';
+import VerifyEmail from './pages/VerifyEmail';
 import Home from './pages/Home';
-import Profile from './pages/Profile'; // Make sure this file exists in ./pages/
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
+
   if (loading) return <div className="p-6 text-center">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (!user.emailVerified) return <Navigate to="/verify-email" replace />;
+
   return children;
 }
 
@@ -24,8 +27,6 @@ function AppRoutes() {
         <Route path="/user-type" element={<UserType />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
-        
-        {/* Home Route */}
         <Route
           path="/home"
           element={
@@ -34,17 +35,6 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-
-        {/* --- NEW PROFILE ROUTE --- */}
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
-
       </Routes>
     </Layout>
   );

@@ -6,20 +6,37 @@ import { auth, db } from '../firebase';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);           // Firebase Auth user
-  const [profile, setProfile] = useState(null);     // Firestore user doc
+  const [user, setUser] = useState(null);        // Firebase Auth user
+  const [profile, setProfile] = useState(null);  // Firestore user doc
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-
       if (currentUser) {
         try {
-          const snap = await getDoc(doc(db, 'users', currentUser.uid));
-          setProfile(snap.exists() ? snap.data() : null);
+          // Force-refresh the user object so emailVerified is up to date
+          await currentUser.reload();
         } catch (err) {
-          console.error('Failed to load profile:', err);
+          console.error('Reload failed:', err);
+        }
+      }
+
+      // Use auth.currentUser AFTER reload — it's the freshest reference
+      const freshUser = auth.currentUser;
+      setUser(freshUser);
+
+      if (freshUser) {
+        try {
+          const snap = await getDoc(doc(db, 'users', freshUser.uid));
+          if (snap.exists()) {
+            console.log('✅ Profile loaded:', snap.data());
+            setProfile(snap.data());
+          } else {
+            console.warn('⚠️ No profile doc for uid:', freshUser.uid);
+            setProfile(null);
+          }
+        } catch (err) {
+          console.error('❌ Profile fetch failed:', err.code, err.message);
           setProfile(null);
         }
       } else {
