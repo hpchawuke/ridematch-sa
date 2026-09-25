@@ -1,36 +1,49 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);        // Firebase Auth user
-  const [profile, setProfile] = useState(null);  // Firestore user doc
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // 1. Force-refresh the Firebase user so emailVerified is up to date
       if (currentUser) {
         try {
-          // Force-refresh the user object so emailVerified is up to date
           await currentUser.reload();
         } catch (err) {
           console.error('Reload failed:', err);
         }
       }
 
-      // Use auth.currentUser AFTER reload — it's the freshest reference
       const freshUser = auth.currentUser;
       setUser(freshUser);
 
+      // 2. Load (or sync) the Firestore profile
       if (freshUser) {
         try {
-          const snap = await getDoc(doc(db, 'users', freshUser.uid));
+          const ref = doc(db, 'users', freshUser.uid);
+          const snap = await getDoc(ref);
+
           if (snap.exists()) {
-            console.log('✅ Profile loaded:', snap.data());
-            setProfile(snap.data());
+            const data = snap.data();
+            setProfile(data);
+
+            // 3. Mirror emailVerified → Firestore.verified (one-way sync)
+            if (freshUser.emailVerified === true && data.verified !== true) {
+              try {
+                await updateDoc(ref, { verified: true });
+                setProfile({ ...data, verified: true });
+                console.log('✅ Synced verified:true to Firestore');
+              } catch (err) {
+                console.error('Failed to sync verified flag:', err);
+              }
+            }
           } else {
             console.warn('⚠️ No profile doc for uid:', freshUser.uid);
             setProfile(null);
