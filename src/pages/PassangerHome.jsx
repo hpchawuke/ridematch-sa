@@ -1,20 +1,55 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import {
   FaRightFromBracket, FaUser, FaPhone, FaCircleCheck, FaTriangleExclamation,
   FaLocationDot, FaMagnifyingGlassLocation, FaCar, FaWallet, FaClockRotateLeft
 } from 'react-icons/fa6';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
 const PassengerHome = () => {
   const navigate = useNavigate();
   const { user, profile, loading } = useAuth();
+  const [pickup, setPickup] = useState('');
+  const [dropoff, setDropoff] = useState('');
+  const [booking, setBooking] = useState(false);
 
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
+  };
+
+  const handleBookRide = async () => {
+    console.log("BUTTON CLICKED!", pickup, dropoff);
+
+    if (!pickup || !dropoff) {
+      alert('Please enter both pickup and drop-off locations.');
+      return;
+    }
+
+    try {
+      setBooking(true);
+      await addDoc(collection(db, 'rideRequests'), {
+        passengerId: user.uid,
+        passengerName: profile?.fullName || user.email,
+        passengerPhone: profile?.phone || 'N/A',
+        pickup,
+        dropoff,
+        status: 'pending',
+        driverId: null,
+        createdAt: serverTimestamp(),
+      });
+      alert('Ride request sent!');
+      setPickup('');
+      setDropoff('');
+    } catch (error) {
+      console.error('Error booking ride:', error);
+      alert('Failed to book ride. Please try again.');
+    } finally {
+      setBooking(false);
+    }
   };
 
   if (loading) {
@@ -30,7 +65,6 @@ const PassengerHome = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 overflow-y-auto">
-      {/* Header */}
       <div className="bg-[#0A7B44] text-white px-6 pt-6 pb-8 rounded-b-3xl">
         <div className="flex items-center justify-between mb-2">
           <div>
@@ -43,7 +77,6 @@ const PassengerHome = () => {
         </div>
       </div>
 
-      {/* Verification banner */}
       {!isVerified && (
         <div className="px-6 -mt-2 mb-2">
           <div className="flex items-start gap-2 bg-yellow-100 border border-yellow-300 rounded-xl px-3 py-2 text-xs text-yellow-800">
@@ -53,7 +86,6 @@ const PassengerHome = () => {
         </div>
       )}
 
-      {/* Book a ride card */}
       <div className="px-6 -mt-4">
         <div className="bg-white rounded-2xl shadow-sm p-5">
           <h2 className="text-lg font-bold text-gray-900 mb-1">Where to?</h2>
@@ -61,15 +93,31 @@ const PassengerHome = () => {
 
           <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-3">
             <FaLocationDot className="text-[#0A7B44] mr-3" />
-            <input type="text" placeholder="Pickup location" className="w-full py-3 outline-none text-sm" />
+            <input
+              type="text"
+              placeholder="Pickup location"
+              value={pickup}
+              onChange={(e) => setPickup(e.target.value)}
+              className="w-full py-3 outline-none text-sm"
+            />
           </div>
           <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-4">
             <FaMagnifyingGlassLocation className="text-[#0A7B44] mr-3" />
-            <input type="text" placeholder="Drop-off location" className="w-full py-3 outline-none text-sm" />
+            <input
+              type="text"
+              placeholder="Drop-off location"
+              value={dropoff}
+              onChange={(e) => setDropoff(e.target.value)}
+              className="w-full py-3 outline-none text-sm"
+            />
           </div>
 
-          <button className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors flex items-center justify-center gap-2">
-            <FaCar /> Book a Ride
+          <button
+            onClick={handleBookRide}
+            disabled={booking}
+            className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <FaCar /> {booking ? 'Booking...' : 'Book a Ride'}
           </button>
 
           <div className="grid grid-cols-2 gap-3 mt-5">
@@ -79,7 +127,6 @@ const PassengerHome = () => {
         </div>
       </div>
 
-      {/* Account */}
       <div className="px-6 mt-6 mb-8">
         <h2 className="text-sm font-semibold text-gray-500 mb-3">ACCOUNT</h2>
         <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
