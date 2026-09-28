@@ -8,6 +8,8 @@ import {
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useState as useStateAlias } from 'react'; 
+import AvailableTrips from '../components/AvailableTrips';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -134,51 +136,63 @@ const Home = () => {
 
 /* ---------- Passenger view ---------- */
 function PassengerView({ navigate }) {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
-      <h2 className="text-lg font-bold text-gray-900 mb-1">Where to?</h2>
-      <p className="text-sm text-gray-500 mb-4">Find a ride in seconds</p>
+    <div>
+      {/* Search card */}
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Where to?</h2>
+        <p className="text-sm text-gray-500 mb-4">Find a ride in seconds</p>
 
-      <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-3">
-        <FaLocationDot className="text-[#0A7B44] mr-3" />
-        <input
-          type="text"
-          placeholder="Pickup location"
-          className="w-full py-3 outline-none text-sm"
-        />
-      </div>
-      <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-4">
-        <FaMagnifyingGlassLocation className="text-[#0A7B44] mr-3" />
-        <input
-          type="text"
-          placeholder="Drop-off location"
-          className="w-full py-3 outline-none text-sm"
-        />
+        <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-3">
+          <FaLocationDot className="text-[#0A7B44] mr-3" />
+          <input
+            type="text"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            placeholder="Pickup location"
+            className="w-full py-3 outline-none text-sm"
+          />
+        </div>
+        <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-4">
+          <FaMagnifyingGlassLocation className="text-[#0A7B44] mr-3" />
+          <input
+            type="text"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            placeholder="Drop-off location"
+            className="w-full py-3 outline-none text-sm"
+          />
+        </div>
+
+        <button
+          onClick={() => navigate(`/search?from=${from}&to=${to}`)}
+          className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors flex items-center justify-center gap-2"
+        >
+          <FaCar /> Find a Ride
+        </button>
+
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <QuickCard
+            icon={<FaClockRotateLeft />}
+            label="My Bookings"
+            onClick={() => navigate('/bookings')}
+          />
+          <QuickCard
+            icon={<FaWallet />}
+            label="Payment"
+            onClick={() => navigate('/bookings')}
+          />
+        </div>
       </div>
 
-      <button
-        onClick={() => navigate('/search')}
-        className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors flex items-center justify-center gap-2"
-      >
-        <FaCar /> Find a Ride
-      </button>
-
-      <div className="grid grid-cols-2 gap-3 mt-5">
-        <QuickCard
-          icon={<FaClockRotateLeft />}
-          label="My Bookings"
-          onClick={() => navigate('/bookings')}
-        />
-        <QuickCard
-          icon={<FaWallet />}
-          label="Payment"
-          onClick={() => navigate('/bookings')}
-        />
-      </div>
+      {/* Available trips list */}
+      <AvailableTrips from={from} to={to} />
     </div>
   );
 }
-
 /* ---------- Driver view ---------- */
 function DriverView({ isOnline, setIsOnline, navigate }) {
   return (

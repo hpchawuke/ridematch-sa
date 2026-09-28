@@ -12,6 +12,7 @@ import Search from './pages/Search';
 import PostRide from './pages/PostRide';
 import Bookings from './pages/Bookings';
 import MyTrips from './pages/MyTrips';
+import BookTrip from './pages/BookTrip';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -85,6 +86,16 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <MyTrips />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ✅ Trip Details / Book Trip Route */}
+        <Route
+          path="/book/:tripId"
+          element={
+            <ProtectedRoute>
+              <BookTrip />
             </ProtectedRoute>
           }
         />
