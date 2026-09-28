@@ -53,6 +53,14 @@ export default function AvailableTrips({ from, to }) {
     };
   }, [from, to]);
 
+  const goToSearch = () => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const qs = params.toString();
+    navigate(qs ? `/search?${qs}` : '/search');
+  };
+
   if (loading) {
     return (
       <div className="mt-6">
@@ -103,7 +111,7 @@ export default function AvailableTrips({ from, to }) {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-500">AVAILABLE TRIPS</h3>
         <button
-          onClick={() => navigate('/search')}
+          onClick={goToSearch}
           className="text-xs text-[#0A7B44] font-medium"
         >
           See all

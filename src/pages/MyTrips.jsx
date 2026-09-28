@@ -26,16 +26,13 @@ const MyTrips = () => {
       if (error) {
         console.error(error);
       } else {
-        setTrips(data);
+        setTrips(data || []);
       }
       setLoading(false);
     };
 
     fetchTrips();
 
-    // Supabase has no live "snapshot" like Firestore's onSnapshot — instead
-    // we subscribe to change events on this driver's trips and refetch the
-    // list whenever something changes.
     const channel = supabase
       .channel(`trips-driver-${user.id}`)
       .on(
@@ -96,7 +93,6 @@ function TripCard({ trip }) {
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [busy, setBusy] = useState(null);
 
-  // Load requests only when expanded
   useEffect(() => {
     if (!expanded) return;
 
@@ -111,7 +107,7 @@ function TripCard({ trip }) {
       if (error) {
         console.error(error);
       } else {
-        setRequests(data);
+        setRequests(data || []);
       }
       setLoadingRequests(false);
     };
@@ -135,19 +131,22 @@ function TripCard({ trip }) {
   const handleAccept = async (booking) => {
     try {
       setBusy(booking.id);
+
       const { error: bookingError } = await supabase
         .from('bookings')
         .update({ status: 'accepted' })
         .eq('id', booking.id);
+
       if (bookingError) throw bookingError;
 
       const { error: seatsError } = await supabase.rpc('decrement_trip_seats', {
         trip_id: trip.id,
       });
+
       if (seatsError) throw seatsError;
     } catch (err) {
       console.error(err);
-      alert('Failed to accept. Check console.');
+      alert('Failed to accept: ' + (err.message || 'Unknown error'));
     } finally {
       setBusy(null);
     }
@@ -163,7 +162,7 @@ function TripCard({ trip }) {
       if (error) throw error;
     } catch (err) {
       console.error(err);
-      alert('Failed to decline. Check console.');
+      alert('Failed to decline: ' + (err.message || 'Unknown error'));
     } finally {
       setBusy(null);
     }
@@ -230,6 +229,7 @@ function TripCard({ trip }) {
               {r.status === 'pending' && (
                 <div className="flex gap-2 mt-3">
                   <button
+                    type="button"
                     onClick={() => handleAccept(r)}
                     disabled={busy === r.id}
                     className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-[#0A7B44] text-white text-xs font-semibold hover:bg-[#065F33] disabled:opacity-50"
@@ -237,6 +237,7 @@ function TripCard({ trip }) {
                     <FaCheck /> Accept
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleDecline(r)}
                     disabled={busy === r.id}
                     className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
