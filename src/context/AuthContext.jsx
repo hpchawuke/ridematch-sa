@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { supabase } from '../supabaseClient';
 
 const AuthContext = createContext(null);
 
@@ -10,56 +8,72 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // 1. Force-refresh the Firebase user so emailVerified is up to date
-      if (currentUser) {
-        try {
-          await currentUser.reload();
-        } catch (err) {
-          console.error('Reload failed:', err);
-        }
-      }
+  const loadProfile = async (currentUser) => {
+    if (!currentUser) {
+      setProfile(null);
+      return;
+    }
 
-      const freshUser = auth.currentUser;
-      setUser(freshUser);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
 
-      // 2. Load (or sync) the Firestore profile
-      if (freshUser) {
-        try {
-          const ref = doc(db, 'users', freshUser.uid);
-          const snap = await getDoc(ref);
-
-          if (snap.exists()) {
-            const data = snap.data();
-            setProfile(data);
-
-            // 3. Mirror emailVerified → Firestore.verified (one-way sync)
-            if (freshUser.emailVerified === true && data.verified !== true) {
-              try {
-                await updateDoc(ref, { verified: true });
-                setProfile({ ...data, verified: true });
-                console.log('✅ Synced verified:true to Firestore');
-              } catch (err) {
-                console.error('Failed to sync verified flag:', err);
-              }
-            }
-          } else {
-            console.warn('⚠️ No profile doc for uid:', freshUser.uid);
-            setProfile(null);
-          }
-        } catch (err) {
-          console.error('❌ Profile fetch failed:', err.code, err.message);
-          setProfile(null);
-        }
-      } else {
+      if (error) {
+        console.error('❌ Profile fetch failed:', error.message);
         setProfile(null);
+        return;
       }
 
+      if (!data) {
+        console.warn('⚠️ No profile row for id:', currentUser.id);
+        setProfile(null);
+        return;
+      }
+
+      setProfile(data);
+
+      // Note: syncing emailVerified → verified used to happen here on the
+      // client. That's now handled server-side by the on_auth_user_verified
+      // trigger the moment Supabase confirms the user's email, so there's
+      // nothing to mirror manually anymore.
+    } catch (err) {
+      console.error('❌ Profile fetch failed:', err.message);
+      setProfile(null);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // 1. Get the current session on first load
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!isMounted) return;
+      const currentUser = data.user ?? null;
+      setUser(currentUser);
+      await loadProfile(currentUser);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // 2. Subscribe to future auth changes (login, logout, token refresh,
+    //    and — importantly — the session Supabase creates once the user
+    //    clicks the email verification link)
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (!isMounted) return;
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        await loadProfile(currentUser);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const value = { user, profile, loading };

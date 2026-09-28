@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import {
   FaArrowLeft, FaLocationDot, FaFlagCheckered, FaCalendarDays,
   FaClock, FaUsers, FaMoneyBill
 } from 'react-icons/fa6';
-import { db } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const GAUTENG = ['Johannesburg', 'Pretoria', 'Midrand', 'Soweto', 'Tembisa'];
@@ -40,22 +39,24 @@ const PostRide = () => {
 
     try {
       setSubmitting(true);
-      await addDoc(collection(db, 'trips'), {
-        driverId: user.uid,
-        driverName: profile?.fullName || user.email,
-        driverPhone: profile?.phone || '',
-        fromRegion,
-        fromCity,
-        toCity,
+      const { error } = await supabase.from('trips').insert({
+        driver_id: user.id,
+        driver_name: profile?.full_name || user.email,
+        driver_phone: profile?.phone || '',
+        from_region: fromRegion,
+        from_city: fromCity,
+        to_city: toCity,
         date,
         time,
         seats: Number(seats),
-        seatsAvailable: Number(seats),
+        seats_available: Number(seats),
         price: PRICE,
         notes: notes.trim(),
         status: 'active',
-        createdAt: serverTimestamp(),
       });
+
+      if (error) throw error;
+
       alert('Trip posted!');
       navigate('/my-trips');
     } catch (err) {

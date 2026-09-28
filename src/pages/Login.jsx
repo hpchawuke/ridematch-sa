@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaEnvelope, FaLock } from 'react-icons/fa6';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { supabase } from '../supabaseClient';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -17,39 +16,35 @@ const Login = () => {
     setError('');
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("Logged in:", userCredential.user.email);
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) throw signInError;
+
+      console.log("Logged in:", data.user.email);
       navigate('/home');
     } catch (err) {
-      console.error("Login error:", err.code, err.message);
+      console.error("Login error:", err.message);
 
-      // Map Firebase error codes to friendly messages
+      // Supabase doesn't have Firebase-style error codes — it returns a
+      // message string instead — so we match on message content.
       let message = "Login failed. Please try again.";
-      switch (err.code) {
-        case 'auth/invalid-email':
-          message = "That email address doesn't look right.";
-          break;
-        case 'auth/user-disabled':
-          message = "This account has been disabled.";
-          break;
-        case 'auth/user-not-found':
-          message = "No account found with that email.";
-          break;
-        case 'auth/wrong-password':
-        case 'auth/invalid-credential':
-          message = "Invalid email or password.";
-          break;
-        case 'auth/too-many-requests':
-          message = "Too many attempts. Try again in a few minutes.";
-          break;
-        case 'auth/network-request-failed':
-          message = "Network error. Check your connection.";
-          break;
-        case 'auth/operation-not-allowed':
-          message = "Email/password login is disabled. Enable it in Firebase Console.";
-          break;
-        default:
-          message = err.message;
+      const msg = err.message?.toLowerCase() || '';
+
+      if (msg.includes('invalid login credentials')) {
+        message = "Invalid email or password.";
+      } else if (msg.includes('email not confirmed')) {
+        message = "Please verify your email before logging in.";
+      } else if (msg.includes('user not found')) {
+        message = "No account found with that email.";
+      } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
+        message = "Too many attempts. Try again in a few minutes.";
+      } else if (msg.includes('network')) {
+        message = "Network error. Check your connection.";
+      } else if (err.message) {
+        message = err.message;
       }
       setError(message);
     } finally {

@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
 import {
   FaRightFromBracket, FaUser, FaPhone, FaCircleCheck, FaTriangleExclamation,
   FaWallet, FaClockRotateLeft, FaBell, FaToggleOn, FaToggleOff,
   FaCar, FaStar
 } from 'react-icons/fa6';
-import { auth } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const DriverHome = () => {
@@ -15,7 +14,7 @@ const DriverHome = () => {
   const [isOnline, setIsOnline] = useState(false);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate('/login');
   };
 
@@ -27,7 +26,7 @@ const DriverHome = () => {
     );
   }
 
-  const firstName = profile?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || 'driver';
+  const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'driver';
   const isVerified = profile?.verified === true;
 
   return (
@@ -107,7 +106,7 @@ const DriverHome = () => {
       <div className="px-6 mt-6 mb-8">
         <h2 className="text-sm font-semibold text-gray-500 mb-3">ACCOUNT</h2>
         <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-          <Row icon={<FaUser />} label="Name" value={profile?.fullName || '—'} />
+          <Row icon={<FaUser />} label="Name" value={profile?.full_name || '—'} />
           <Row icon={<FaPhone />} label="Phone" value={profile?.phone || '—'} />
           <Row icon={<FaCircleCheck className={isVerified ? 'text-green-500' : 'text-gray-300'} />} label="Verified" value={isVerified ? 'Yes' : 'No'} />
         </div>

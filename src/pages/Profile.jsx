@@ -1,22 +1,76 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
 import {
   FaArrowLeft, FaCircleCheck, FaStar, FaCarSide,
   FaLocationDot, FaClock, FaUser, FaPhone, FaEnvelope,
   FaRightFromBracket, FaHouse, FaMagnifyingGlass,
-  FaCalendarDays, FaPenToSquare
+  FaCalendarDays, FaPenToSquare, FaCamera
 } from 'react-icons/fa6';
-import { auth } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { user, profile, loading } = useAuth();
 
+  const fileInputRef = useRef(null);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  // Keep local avatar in sync with the profile row once it loads
+  useEffect(() => {
+    setAvatarUrl(profile?.avatar_url || '');
+  }, [profile?.avatar_url]);
+
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate('/login');
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // lets the user re-pick the same file later
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please choose an image file.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError('Image must be under 2 MB.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+
+    try {
+      // One fixed path per user, so a new upload replaces the old one
+      const path = `${user.id}/avatar`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadErr) throw uploadErr;
+
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      // Timestamp busts the browser cache since the path never changes
+      const url = `${data.publicUrl}?t=${Date.now()}`;
+
+      const { error: dbErr } = await supabase
+        .from('users')
+        .update({ avatar_url: url })
+        .eq('id', user.id);
+      if (dbErr) throw dbErr;
+
+      setAvatarUrl(url);
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      setUploadError(err.message || 'Upload failed. Try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   if (loading) {
@@ -27,20 +81,23 @@ const Profile = () => {
     );
   }
 
-  const isDriver = profile?.userType === 'Driver';
+  const isDriver = profile?.user_type === 'Driver';
   const isVerified = profile?.verified === true;
 
-  const displayName = profile?.fullName || 'User Name';
+  const displayName = profile?.full_name || 'User Name';
   const displayPhone = profile?.phone || '—';
   const displayEmail = user?.email || '—';
+  // Note: vehicle, route, rating, trips, and aboutMe were never part of the
+  // Firestore users doc either — these fall back to defaults until you add
+  // matching columns to public.users and start writing to them.
   const vehicle = profile?.vehicle || 'Toyota Corolla';
   const route = profile?.route || 'Gauteng → Limpopo';
-  const memberSince = profile?.createdAt
-    ? new Date(profile.createdAt).getFullYear()
+  const memberSince = profile?.created_at
+    ? new Date(profile.created_at).getFullYear()
     : new Date().getFullYear();
   const rating = profile?.rating || '4.8';
   const trips = profile?.trips || '0';
-  const aboutMe = profile?.aboutMe ||
+  const aboutMe = profile?.about_me ||
     'Safe, friendly and punctual. Travelling regularly between Johannesburg and Polokwane.';
 
   return (
@@ -77,11 +134,41 @@ const Profile = () => {
 
           {/* Avatar + name */}
           <div className="flex flex-col items-center text-center">
-            <div className="w-24 h-24 rounded-full bg-gray-200 mb-3 overflow-hidden border-4 border-white shadow-sm">
-              <div className="w-full h-full flex items-center justify-center bg-[#0A7B44] text-white text-3xl font-bold">
-                {displayName.charAt(0)}
+            <div className="relative mb-3">
+              <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden border-4 border-white shadow-sm">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-[#0A7B44] text-white text-3xl font-bold">
+                    {displayName.charAt(0)}
+                  </div>
+                )}
               </div>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#0A7B44] text-white flex items-center justify-center border-2 border-white shadow disabled:opacity-60"
+                title="Change photo"
+              >
+                <FaCamera className="text-xs" />
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
             </div>
+
+            {uploading && <p className="text-xs text-gray-500 mb-2">Uploading…</p>}
+            {uploadError && <p className="text-xs text-red-600 mb-2">{uploadError}</p>}
 
             <h2 className="text-xl font-bold text-gray-900">{displayName}</h2>
 

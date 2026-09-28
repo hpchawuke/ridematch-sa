@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  collection, query, where, getDocs, addDoc, serverTimestamp
-} from 'firebase/firestore';
-import {
   FaArrowLeft, FaLocationDot, FaFlagCheckered, FaCalendarDays,
   FaUser, FaClock, FaUsers
 } from 'react-icons/fa6';
-import { db } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const GAUTENG = ['Johannesburg', 'Pretoria', 'Midrand', 'Soweto', 'Tembisa'];
@@ -31,15 +28,16 @@ const Search = () => {
     }
     try {
       setLoading(true);
-      const q = query(
-        collection(db, 'trips'),
-        where('fromCity', '==', fromCity),
-        where('toCity', '==', toCity),
-        where('date', '==', date),
-        where('status', '==', 'active')
-      );
-      const snap = await getDocs(q);
-      setResults(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const { data, error } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('from_city', fromCity)
+        .eq('to_city', toCity)
+        .eq('date', date)
+        .eq('status', 'active');
+
+      if (error) throw error;
+      setResults(data);
     } catch (err) {
       console.error(err);
       alert('Search failed. Check console for details.');
@@ -49,32 +47,34 @@ const Search = () => {
   };
 
   const handleRequestSeat = async (trip) => {
-    if (trip.driverId === user.uid) {
+    if (trip.driver_id === user.id) {
       alert("You can't book your own trip.");
       return;
     }
-    if (trip.seatsAvailable <= 0) {
+    if (trip.seats_available <= 0) {
       alert('No seats left on this trip.');
       return;
     }
     try {
       setBooking(trip.id);
-      await addDoc(collection(db, 'bookings'), {
-        tripId: trip.id,
-        passengerId: user.uid,
-        passengerName: profile?.fullName || user.email,
-        passengerPhone: profile?.phone || '',
-        driverId: trip.driverId,
-        driverName: trip.driverName,
-        driverPhone: trip.driverPhone || '',
-        fromCity: trip.fromCity,
-        toCity: trip.toCity,
+      const { error } = await supabase.from('bookings').insert({
+        trip_id: trip.id,
+        passenger_id: user.id,
+        passenger_name: profile?.full_name || user.email,
+        passenger_phone: profile?.phone || '',
+        driver_id: trip.driver_id,
+        driver_name: trip.driver_name,
+        driver_phone: trip.driver_phone || '',
+        from_city: trip.from_city,
+        to_city: trip.to_city,
         date: trip.date,
         time: trip.time,
         price: trip.price,
         status: 'pending',
-        createdAt: serverTimestamp(),
       });
+
+      if (error) throw error;
+
       alert('Seat requested! Waiting for driver to confirm.');
       navigate('/bookings');
     } catch (err) {
@@ -152,7 +152,7 @@ const Search = () => {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                 <FaLocationDot className="text-[#0A7B44]" />
-                {trip.fromCity} → {trip.toCity}
+                {trip.from_city} → {trip.to_city}
               </div>
               <span className="font-bold text-[#0A7B44]">R {trip.price}</span>
             </div>
@@ -160,12 +160,12 @@ const Search = () => {
             <div className="flex flex-wrap gap-4 text-xs text-gray-500 mb-4">
               <span className="flex items-center gap-1"><FaCalendarDays /> {trip.date}</span>
               <span className="flex items-center gap-1"><FaClock /> {trip.time}</span>
-              <span className="flex items-center gap-1"><FaUsers /> {trip.seatsAvailable} seats</span>
+              <span className="flex items-center gap-1"><FaUsers /> {trip.seats_available} seats</span>
             </div>
 
             <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
               <FaUser className="text-gray-400" />
-              {trip.driverName}
+              {trip.driver_name}
             </div>
 
             {trip.notes && (
@@ -174,12 +174,12 @@ const Search = () => {
 
             <button
               onClick={() => handleRequestSeat(trip)}
-              disabled={booking === trip.id || trip.seatsAvailable <= 0}
+              disabled={booking === trip.id || trip.seats_available <= 0}
               className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors disabled:opacity-50"
             >
               {booking === trip.id
                 ? 'Requesting…'
-                : trip.seatsAvailable <= 0
+                : trip.seats_available <= 0
                   ? 'Full'
                   : 'Request Seat'}
             </button>

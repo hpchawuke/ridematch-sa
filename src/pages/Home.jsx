@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
 import {
   FaRightFromBracket, FaLocationDot, FaMagnifyingGlassLocation,
   FaCar, FaWallet, FaClockRotateLeft, FaBell, FaToggleOn, FaToggleOff,
   FaUser, FaPhone, FaCircleCheck, FaTriangleExclamation,
   FaHouse, FaMagnifyingGlass, FaCalendarDays, FaCarSide
 } from 'react-icons/fa6';
-import { auth } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const Home = () => {
@@ -16,7 +15,7 @@ const Home = () => {
   const [isOnline, setIsOnline] = useState(false);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate('/login');
   };
 
@@ -28,9 +27,13 @@ const Home = () => {
     );
   }
 
-  const firstName = profile?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
-  const isDriver = profile?.userType === 'Driver';
-  const isVerified = user?.emailVerified === true;
+  const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  const isDriver = profile?.user_type === 'Driver';
+  // Firebase's `emailVerified` boolean maps to Supabase's `email_confirmed_at`
+  // timestamp (null until confirmed). We also keep profile.verified in sync
+  // server-side via a DB trigger, so either works — this checks the source
+  // of truth directly.
+  const isVerified = Boolean(user?.email_confirmed_at);
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 h-screen relative">
@@ -79,7 +82,7 @@ const Home = () => {
         <div className="px-6 mt-6 mb-8">
           <h2 className="text-sm font-semibold text-gray-500 mb-3">ACCOUNT</h2>
           <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-            <Row icon={<FaUser />} label="Name" value={profile?.fullName || '—'} />
+            <Row icon={<FaUser />} label="Name" value={profile?.full_name || '—'} />
             <Row icon={<FaPhone />} label="Phone" value={profile?.phone || '—'} />
             <Row
               icon={<FaCircleCheck className={isVerified ? 'text-green-500' : 'text-gray-300'} />}

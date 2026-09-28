@@ -1,14 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  collection, query, where, onSnapshot, orderBy,
-  updateDoc, doc, increment
-} from 'firebase/firestore';
-import {
   FaArrowLeft, FaLocationDot, FaCalendarDays, FaClock, FaUsers,
   FaChevronDown, FaChevronUp, FaPhone, FaCheck, FaXmark
 } from 'react-icons/fa6';
-import { db } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const MyTrips = () => {
@@ -19,22 +15,39 @@ const MyTrips = () => {
 
   useEffect(() => {
     if (!user) return;
-    const q = query(
-      collection(db, 'trips'),
-      where('driverId', '==', user.uid),
-      orderBy('createdAt', 'desc')
-    );
-    const unsub = onSnapshot(q,
-      (snap) => {
-        setTrips(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error(err);
-        setLoading(false);
+
+    const fetchTrips = async () => {
+      const { data, error } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('driver_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error(error);
+      } else {
+        setTrips(data);
       }
-    );
-    return unsub;
+      setLoading(false);
+    };
+
+    fetchTrips();
+
+    // Supabase has no live "snapshot" like Firestore's onSnapshot — instead
+    // we subscribe to change events on this driver's trips and refetch the
+    // list whenever something changes.
+    const channel = supabase
+      .channel(`trips-driver-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'trips', filter: `driver_id=eq.${user.id}` },
+        fetchTrips
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   return (
@@ -86,32 +99,52 @@ function TripCard({ trip }) {
   // Load requests only when expanded
   useEffect(() => {
     if (!expanded) return;
-    setLoadingRequests(true);
-    const q = query(
-      collection(db, 'bookings'),
-      where('tripId', '==', trip.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsub = onSnapshot(q,
-      (snap) => {
-        setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoadingRequests(false);
-      },
-      (err) => {
-        console.error(err);
-        setLoadingRequests(false);
+
+    const fetchRequests = async () => {
+      setLoadingRequests(true);
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('trip_id', trip.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error(error);
+      } else {
+        setRequests(data);
       }
-    );
-    return unsub;
+      setLoadingRequests(false);
+    };
+
+    fetchRequests();
+
+    const channel = supabase
+      .channel(`bookings-trip-${trip.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `trip_id=eq.${trip.id}` },
+        fetchRequests
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [expanded, trip.id]);
 
   const handleAccept = async (booking) => {
     try {
       setBusy(booking.id);
-      await updateDoc(doc(db, 'bookings', booking.id), { status: 'accepted' });
-      await updateDoc(doc(db, 'trips', trip.id), {
-        seatsAvailable: increment(-1),
+      const { error: bookingError } = await supabase
+        .from('bookings')
+        .update({ status: 'accepted' })
+        .eq('id', booking.id);
+      if (bookingError) throw bookingError;
+
+      const { error: seatsError } = await supabase.rpc('decrement_trip_seats', {
+        trip_id: trip.id,
       });
+      if (seatsError) throw seatsError;
     } catch (err) {
       console.error(err);
       alert('Failed to accept. Check console.');
@@ -123,7 +156,11 @@ function TripCard({ trip }) {
   const handleDecline = async (booking) => {
     try {
       setBusy(booking.id);
-      await updateDoc(doc(db, 'bookings', booking.id), { status: 'declined' });
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'declined' })
+        .eq('id', booking.id);
+      if (error) throw error;
     } catch (err) {
       console.error(err);
       alert('Failed to decline. Check console.');
@@ -140,7 +177,7 @@ function TripCard({ trip }) {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
             <FaLocationDot className="text-[#0A7B44]" />
-            {trip.fromCity} → {trip.toCity}
+            {trip.from_city} → {trip.to_city}
           </div>
           <span className="font-bold text-[#0A7B44]">R {trip.price}</span>
         </div>
@@ -149,7 +186,7 @@ function TripCard({ trip }) {
           <span className="flex items-center gap-1"><FaCalendarDays /> {trip.date}</span>
           <span className="flex items-center gap-1"><FaClock /> {trip.time}</span>
           <span className="flex items-center gap-1">
-            <FaUsers /> {trip.seatsAvailable}/{trip.seats} seats left
+            <FaUsers /> {trip.seats_available}/{trip.seats} seats left
           </span>
         </div>
 
@@ -181,12 +218,12 @@ function TripCard({ trip }) {
           {requests.map((r) => (
             <div key={r.id} className="bg-white rounded-xl p-3 text-sm">
               <div className="flex items-center justify-between mb-1">
-                <span className="font-medium text-gray-900">{r.passengerName}</span>
+                <span className="font-medium text-gray-900">{r.passenger_name}</span>
                 <RequestBadge status={r.status} />
               </div>
-              {r.passengerPhone && (
+              {r.passenger_phone && (
                 <p className="flex items-center gap-1 text-xs text-gray-500">
-                  <FaPhone className="text-gray-400" /> {r.passengerPhone}
+                  <FaPhone className="text-gray-400" /> {r.passenger_phone}
                 </p>
               )}
 

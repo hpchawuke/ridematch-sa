@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase';
-import { sendEmailVerification, signOut } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../supabaseClient';
 import { FaEnvelopeCircleCheck, FaArrowRotateRight, FaRightFromBracket } from 'react-icons/fa6';
 
 const VerifyEmail = () => {
@@ -10,6 +8,15 @@ const VerifyEmail = () => {
   const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [email, setEmail] = useState('your email');
+
+  // Supabase has no `auth.currentUser` you can read synchronously —
+  // fetch the current user once on mount to display their email.
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) setEmail(data.user.email);
+    });
+  }, []);
 
   const handleCheckVerified = async () => {
     setChecking(true);
@@ -17,14 +24,14 @@ const VerifyEmail = () => {
     setMessage('');
 
     try {
-      // Force-refresh user from Firebase to get the latest emailVerified value
-      await auth.currentUser.reload();
-      const user = auth.currentUser;
+      // Re-fetch the user from the server for the latest confirmation status
+      const { data, error: getUserError } = await supabase.auth.getUser();
+      if (getUserError) throw getUserError;
 
-      if (user.emailVerified) {
-        // Flip Firestore verified to true
-        await updateDoc(doc(db, 'users', user.uid), { verified: true });
-
+      if (data.user?.email_confirmed_at) {
+        // No manual Postgres update needed here — the on_auth_user_verified
+        // trigger already flipped profile.verified to true server-side the
+        // moment Supabase recorded the confirmation.
         setMessage('Verified! Taking you to your dashboard…');
         setTimeout(() => navigate('/home', { replace: true }), 800);
       } else {
@@ -40,7 +47,12 @@ const VerifyEmail = () => {
 
   const handleResend = async () => {
     try {
-      await sendEmailVerification(auth.currentUser);
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      });
+      if (resendError) throw resendError;
+
       setMessage('Verification email sent again. Check your inbox.');
       setError('');
     } catch (err) {
@@ -49,11 +61,9 @@ const VerifyEmail = () => {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate('/login');
   };
-
-  const email = auth.currentUser?.email || 'your email';
 
   return (
     <div className="flex-1 flex flex-col p-6 bg-white">

@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FaArrowLeft, FaUser, FaEnvelope, FaPhone, FaLock, FaCircleCheck } from 'react-icons/fa6';
-import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { supabase } from '../supabaseClient';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -37,37 +35,31 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      // 1. Create the user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
-      const user = userCredential.user;
-
-      // 2. Set the display name on the auth user
-      await updateProfile(user, { displayName: formData.fullName });
-
-      // 3. Send the verification email
-      await sendEmailVerification(user);
-
-      // 4. Save the user profile in Firestore
-      await setDoc(doc(db, "users", user.uid), {
-        fullName: formData.fullName,
+      // 1. Create the user in Supabase Auth. The `data` in options becomes
+      //    raw_user_meta_data, which the DB trigger reads to populate the
+      //    public.users row automatically (replaces the manual setDoc call).
+      const { data, error } = await supabase.auth.signUp({
         email: formData.email,
-        phone: formData.phone,
-        userType: userType,
-        verified: false,
-        createdAt: new Date().toISOString(),
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
+            phone: formData.phone,
+            user_type: userType,
+          },
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
       });
 
-      console.log("User created:", user.uid);
+      if (error) throw error;
 
-      // 5. Show the verification screen instead of redirecting
+      console.log("User created:", data.user?.id);
+
+      // 2. Show the verification screen instead of redirecting
       setShowVerifyScreen(true);
 
     } catch (error) {
-      console.error("Signup error:", error.code, error.message);
+      console.error("Signup error:", error.message);
       alert(`Error: ${error.message}`);
     } finally {
       setLoading(false);
@@ -78,30 +70,16 @@ const Signup = () => {
     setResending(true);
     setResendMessage('');
     try {
-      if (auth.currentUser) {
-        await sendEmailVerification(auth.currentUser);
-        setResendMessage("Verification email resent!");
-      }
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: formData.email,
+      });
+      if (error) throw error;
+      setResendMessage("Verification email resent!");
     } catch (error) {
       setResendMessage(`Error: ${error.message}`);
     } finally {
       setResending(false);
-    }
-  };
-
-  const handleCheckVerification = async () => {
-    try {
-      if (!auth.currentUser) return;
-      await auth.currentUser.reload();
-      if (auth.currentUser.emailVerified) {
-        // Email is verified — let them in
-        navigate('/home');
-      } else {
-        alert("Email not verified yet. Please check your inbox and click the link.");
-      }
-    } catch (error) {
-      console.error("Error checking verification:", error);
-      alert("Could not check verification status. Try again.");
     }
   };
 
@@ -116,25 +94,25 @@ const Signup = () => {
         </div>
 
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Verify Your Email
+          Check Your Email
         </h2>
         <p className="text-sm text-gray-500 mb-2">
-          We've sent a verification link to:
+          We've sent a confirmation email to:
         </p>
         <p className="text-sm font-semibold text-gray-800 mb-6">
           {formData.email}
         </p>
 
         <p className="text-xs text-gray-500 mb-8 max-w-xs">
-          Click the link in the email to verify your account. Once verified,
-          press the button below to continue.
+          Open the email and click the link to confirm your account.
+          Once confirmed, come back and log in.
         </p>
 
         <button
-          onClick={handleCheckVerification}
+          onClick={() => navigate('/login')}
           className="w-full max-w-xs py-4 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors mb-3"
         >
-          I've Verified My Email
+          Go to Login
         </button>
 
         <button

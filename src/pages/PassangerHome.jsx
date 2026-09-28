@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import {
   FaRightFromBracket, FaUser, FaPhone, FaCircleCheck, FaTriangleExclamation,
   FaLocationDot, FaMagnifyingGlassLocation, FaCar, FaWallet, FaClockRotateLeft
 } from 'react-icons/fa6';
-import { auth, db } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const PassengerHome = () => {
@@ -17,7 +15,7 @@ const PassengerHome = () => {
   const [booking, setBooking] = useState(false);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate('/login');
   };
 
@@ -31,16 +29,18 @@ const PassengerHome = () => {
 
     try {
       setBooking(true);
-      await addDoc(collection(db, 'rideRequests'), {
-        passengerId: user.uid,
-        passengerName: profile?.fullName || user.email,
-        passengerPhone: profile?.phone || 'N/A',
+      const { error } = await supabase.from('ride_requests').insert({
+        passenger_id: user.id,
+        passenger_name: profile?.full_name || user.email,
+        passenger_phone: profile?.phone || 'N/A',
         pickup,
         dropoff,
         status: 'pending',
-        driverId: null,
-        createdAt: serverTimestamp(),
+        driver_id: null,
       });
+
+      if (error) throw error;
+
       alert('Ride request sent!');
       setPickup('');
       setDropoff('');
@@ -60,7 +60,7 @@ const PassengerHome = () => {
     );
   }
 
-  const firstName = profile?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const isVerified = profile?.verified === true;
 
   return (
@@ -130,7 +130,7 @@ const PassengerHome = () => {
       <div className="px-6 mt-6 mb-8">
         <h2 className="text-sm font-semibold text-gray-500 mb-3">ACCOUNT</h2>
         <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-          <Row icon={<FaUser />} label="Name" value={profile?.fullName || '—'} />
+          <Row icon={<FaUser />} label="Name" value={profile?.full_name || '—'} />
           <Row icon={<FaPhone />} label="Phone" value={profile?.phone || '—'} />
           <Row icon={<FaCircleCheck className={isVerified ? 'text-green-500' : 'text-gray-300'} />} label="Verified" value={isVerified ? 'Yes' : 'No'} />
         </div>
