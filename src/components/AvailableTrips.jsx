@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaLocationDot, FaClock, FaUserCheck, FaArrowRight } from 'react-icons/fa6';
+import { FaLocationDot, FaClock, FaArrowRight } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 
 export default function AvailableTrips({ from, to }) {
@@ -21,7 +21,7 @@ export default function AvailableTrips({ from, to }) {
       let query = supabase
         .from('trips')
         .select(
-          'id, driver_id, driver_name, driver_phone, from_city, to_city, date, time, price, seats_available, status, from_region, notes'
+          'id, driver_id, driver_name, driver_phone, from_city, to_city, date, time, price, seats_available, status, from_region, notes, driver:users!trips_driver_public_fkey(avatar_url, vehicle)'
         )
         .eq('status', 'active')
         .gt('seats_available', 0)
@@ -120,10 +120,15 @@ export default function AvailableTrips({ from, to }) {
 
       <div className="space-y-3">
         {trips.map((trip) => (
-          <button
+          <div
             key={trip.id}
             onClick={() => navigate(`/book/${trip.id}`)}
-            className="w-full text-left bg-white rounded-2xl shadow-sm p-4 hover:shadow-md transition-shadow"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') navigate(`/book/${trip.id}`);
+            }}
+            className="w-full text-left bg-white rounded-2xl shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
           >
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2 text-gray-900 font-semibold">
@@ -149,12 +154,34 @@ export default function AvailableTrips({ from, to }) {
             </div>
 
             {trip.driver_name && (
-              <div className="flex items-center gap-1 mt-2 text-xs text-gray-600">
-                <FaUserCheck className="text-green-500" />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/driver/${trip.driver_id}`);
+                }}
+                className="flex items-center gap-2 mt-2 text-xs text-gray-600 hover:text-gray-900"
+              >
+                <div className="w-5 h-5 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                  {trip.driver?.avatar_url ? (
+                    <img
+                      src={trip.driver.avatar_url}
+                      alt={trip.driver_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-[#0A7B44] text-white text-[8px] font-bold">
+                      {trip.driver_name.charAt(0)}
+                    </div>
+                  )}
+                </div>
                 <span>{trip.driver_name}</span>
-              </div>
+                {trip.driver?.vehicle && (
+                  <span className="text-gray-400">· {trip.driver.vehicle}</span>
+                )}
+              </button>
             )}
-          </button>
+          </div>
         ))}
       </div>
     </div>

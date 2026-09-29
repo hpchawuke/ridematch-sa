@@ -221,7 +221,7 @@ const Profile = () => {
         {/* Edit Profile — disabled for now, no route exists */}
         <div className="px-6 mb-8">
           <button
-            onClick={() => alert('Edit Profile coming soon.')}
+            onClick={() => navigate('/profile/edit')}
             className="w-full py-4 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors flex items-center justify-center gap-2 shadow-sm"
           >
             <FaPenToSquare />

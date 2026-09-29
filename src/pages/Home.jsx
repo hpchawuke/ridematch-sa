@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   FaRightFromBracket, FaLocationDot, FaMagnifyingGlassLocation,
   FaCar, FaWallet, FaClockRotateLeft, FaBell, FaToggleOn, FaToggleOff,
-  FaUser, FaPhone, FaCircleCheck, FaTriangleExclamation,
+  FaUser, FaTriangleExclamation,
   FaHouse, FaMagnifyingGlass, FaCalendarDays, FaCarSide
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { useState as useStateAlias } from 'react'; 
 import AvailableTrips from '../components/AvailableTrips';
 
 const Home = () => {
@@ -79,20 +78,6 @@ const Home = () => {
             <PassengerView navigate={navigate} />
           )}
         </div>
-
-        {/* Account summary */}
-        <div className="px-6 mt-6 mb-8">
-          <h2 className="text-sm font-semibold text-gray-500 mb-3">ACCOUNT</h2>
-          <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-            <Row icon={<FaUser />} label="Name" value={profile?.full_name || '—'} />
-            <Row icon={<FaPhone />} label="Phone" value={profile?.phone || '—'} />
-            <Row
-              icon={<FaCircleCheck className={isVerified ? 'text-green-500' : 'text-gray-300'} />}
-              label="Verified"
-              value={isVerified ? 'Yes' : 'No'}
-            />
-          </div>
-        </div>
       </div>
 
       {/* --- BOTTOM NAVIGATION BAR --- */}
@@ -144,7 +129,9 @@ function PassengerView({ navigate }) {
       {/* Search card */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Where to?</h2>
-        <p className="text-sm text-gray-500 mb-4">Find a ride in seconds</p>
+        <p className="text-sm text-gray-500 mb-4">
+          Find a ride in seconds, or scroll down to see what's available now
+        </p>
 
         <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-3">
           <FaLocationDot className="text-[#0A7B44] mr-3" />
@@ -188,11 +175,14 @@ function PassengerView({ navigate }) {
         </div>
       </div>
 
-      {/* Available trips list */}
+      {/* Available trips — shown directly below the search card, no click
+          required. Typing in the fields above filters this list live;
+          the "Find a Ride" button is only needed for the full search page. */}
       <AvailableTrips from={from} to={to} />
     </div>
   );
 }
+
 /* ---------- Driver view ---------- */
 function DriverView({ isOnline, setIsOnline, navigate }) {
   return (
@@ -254,16 +244,6 @@ function NavBtn({ icon, label, onClick, active }) {
       <span className="text-xl">{icon}</span>
       <span className={`text-[10px] ${active ? 'font-medium' : ''}`}>{label}</span>
     </button>
-  );
-}
-
-function Row({ icon, label, value }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <span className="text-gray-400">{icon}</span>
-      <span className="text-sm text-gray-500 flex-1">{label}</span>
-      <span className="text-sm font-medium text-gray-900">{value}</span>
-    </div>
   );
 }
 

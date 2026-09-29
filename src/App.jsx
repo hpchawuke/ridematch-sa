@@ -13,6 +13,8 @@ import PostRide from './pages/PostRide';
 import Bookings from './pages/Bookings';
 import MyTrips from './pages/MyTrips';
 import BookTrip from './pages/BookTrip';
+import DriverProfile from './pages/DriverProfile';
+import EditProfile from './pages/EditProfile';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -29,6 +31,8 @@ function AppRoutes() {
         <Route path="/user-type" element={<UserType />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/profile/edit" element={<EditProfile />} />
+
 
         {/* Home Route */}
         <Route
@@ -69,6 +73,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route path="/driver/:driverId" element={<DriverProfile />} />
 
         {/* Bookings Route (passenger) */}
         <Route

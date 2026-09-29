@@ -92,6 +92,7 @@ function TripCard({ trip }) {
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [busy, setBusy] = useState(null);
+  const isFull = trip.status === 'full';
 
   useEffect(() => {
     if (!expanded) return;
@@ -132,18 +133,16 @@ function TripCard({ trip }) {
     try {
       setBusy(booking.id);
 
-      const { error: bookingError } = await supabase
-        .from('bookings')
-        .update({ status: 'accepted' })
-        .eq('id', booking.id);
-
-      if (bookingError) throw bookingError;
-
-      const { error: seatsError } = await supabase.rpc('decrement_trip_seats', {
-        trip_id: trip.id,
+      // One atomic call: checks the seat is still free, accepts this
+      // booking, decrements seats, and — if that was the last seat —
+      // marks the trip 'full' and bumps every other pending request on
+      // it to 'full' too, server-side. Row updates arrive via the
+      // realtime subscription above, so no manual refetch needed here.
+      const { error } = await supabase.rpc('accept_booking', {
+        p_booking_id: booking.id,
       });
 
-      if (seatsError) throw seatsError;
+      if (error) throw error;
     } catch (err) {
       console.error(err);
       alert('Failed to accept: ' + (err.message || 'Unknown error'));
@@ -178,7 +177,13 @@ function TripCard({ trip }) {
             <FaLocationDot className="text-[#0A7B44]" />
             {trip.from_city} → {trip.to_city}
           </div>
-          <span className="font-bold text-[#0A7B44]">R {trip.price}</span>
+          {isFull ? (
+            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+              Ride Full
+            </span>
+          ) : (
+            <span className="font-bold text-[#0A7B44]">R {trip.price}</span>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-4 text-xs text-gray-500">
@@ -260,6 +265,9 @@ function RequestBadge({ status }) {
   }
   if (status === 'declined') {
     return <span className="text-xs text-red-500 font-medium">Declined</span>;
+  }
+  if (status === 'full') {
+    return <span className="text-xs text-gray-500 font-medium">Ride full</span>;
   }
   return <span className="text-xs text-yellow-600 font-medium">Pending</span>;
 }

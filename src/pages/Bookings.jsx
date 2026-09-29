@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaCalendarDays, FaLocationDot, FaClock,
-  FaUser, FaPhone
+  FaPhone
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ const Bookings = () => {
     const fetchBookings = async () => {
       const { data, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, driver:users!bookings_driver_public_fkey(avatar_url)')
         .eq('passenger_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -83,6 +83,8 @@ const Bookings = () => {
 };
 
 function BookingCard({ booking: b }) {
+  const navigate = useNavigate();
+
   return (
     <div className="bg-white rounded-2xl shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
@@ -99,10 +101,21 @@ function BookingCard({ booking: b }) {
         <span className="font-semibold text-[#0A7B44]">R {b.price}</span>
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-gray-500">
-        <FaUser className="text-gray-400" />
-        {b.driver_name}
-      </div>
+      <button
+        onClick={() => navigate(`/driver/${b.driver_id}`)}
+        className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-900"
+      >
+        <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+          {b.driver?.avatar_url ? (
+            <img src={b.driver.avatar_url} alt={b.driver_name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-[#0A7B44] text-white text-[10px] font-bold">
+              {(b.driver_name || 'D').charAt(0)}
+            </div>
+          )}
+        </div>
+        <span className="font-medium">{b.driver_name}</span>
+      </button>
 
       {/* Driver's number only appears once they've accepted the request */}
       {b.status === 'accepted' && b.driver_phone && (
