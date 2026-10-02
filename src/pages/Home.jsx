@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FaRightFromBracket, FaLocationDot, FaMagnifyingGlassLocation,
-  FaCar, FaWallet, FaClockRotateLeft, FaBell, FaToggleOn, FaToggleOff,
+  FaRightFromBracket, FaClockRotateLeft, FaBell, FaToggleOn, FaToggleOff,
   FaUser, FaTriangleExclamation,
   FaHouse, FaMagnifyingGlass, FaCalendarDays, FaCarSide
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import AvailableTrips from '../components/AvailableTrips';
+import VerificationModal from '../components/VerificationModal';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -38,6 +38,7 @@ const Home = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 h-screen relative">
+      <VerificationModal />
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto pb-24">
@@ -75,7 +76,7 @@ const Home = () => {
           {isDriver ? (
             <DriverView isOnline={isOnline} setIsOnline={setIsOnline} navigate={navigate} />
           ) : (
-            <PassengerView navigate={navigate} />
+            <PassengerView />
           )}
         </div>
       </div>
@@ -120,65 +121,19 @@ const Home = () => {
 };
 
 /* ---------- Passenger view ---------- */
-function PassengerView({ navigate }) {
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-
+function PassengerView() {
   return (
     <div>
-      {/* Search card */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Where to?</h2>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-500">
           Find a ride in seconds, or scroll down to see what's available now
         </p>
-
-        <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-3">
-          <FaLocationDot className="text-[#0A7B44] mr-3" />
-          <input
-            type="text"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            placeholder="Pickup location"
-            className="w-full py-3 outline-none text-sm"
-          />
-        </div>
-        <div className="flex items-center border border-gray-200 rounded-xl px-4 mb-4">
-          <FaMagnifyingGlassLocation className="text-[#0A7B44] mr-3" />
-          <input
-            type="text"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            placeholder="Drop-off location"
-            className="w-full py-3 outline-none text-sm"
-          />
-        </div>
-
-        <button
-          onClick={() => navigate(`/search?from=${from}&to=${to}`)}
-          className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors flex items-center justify-center gap-2"
-        >
-          <FaCar /> Find a Ride
-        </button>
-
-        <div className="grid grid-cols-2 gap-3 mt-5">
-          <QuickCard
-            icon={<FaClockRotateLeft />}
-            label="My Bookings"
-            onClick={() => navigate('/bookings')}
-          />
-          <QuickCard
-            icon={<FaWallet />}
-            label="Payment"
-            onClick={() => navigate('/bookings')}
-          />
-        </div>
       </div>
 
-      {/* Available trips — shown directly below the search card, no click
-          required. Typing in the fields above filters this list live;
-          the "Find a Ride" button is only needed for the full search page. */}
-      <AvailableTrips from={from} to={to} />
+      {/* No from/to filtering now that the search fields are gone — this
+          just shows every upcoming active trip. */}
+      <AvailableTrips from="" to="" />
     </div>
   );
 }

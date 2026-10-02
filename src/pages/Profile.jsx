@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FaArrowLeft, FaCircleCheck, FaStar, FaCarSide,
+  FaArrowLeft, FaCircleCheck, FaCircleXmark, FaStar, FaCarSide,
   FaLocationDot, FaClock, FaUser, FaPhone, FaEnvelope,
   FaRightFromBracket, FaHouse, FaMagnifyingGlass,
   FaCalendarDays, FaPenToSquare, FaCamera
@@ -22,6 +22,25 @@ const Profile = () => {
   useEffect(() => {
     setAvatarUrl(profile?.avatar_url || '');
   }, [profile?.avatar_url]);
+
+  // The "Verified" badge for a driver should reflect admin document
+  // approval (driver_verifications.status), not email confirmation —
+  // those are two different kinds of "verified".
+  const [driverVerificationStatus, setDriverVerificationStatus] = useState(null);
+
+  useEffect(() => {
+    if (!user || profile?.user_type !== 'Driver') return;
+
+    supabase
+      .from('driver_verifications')
+      .select('status')
+      .eq('driver_id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) console.error(error);
+        setDriverVerificationStatus(data?.status || 'not_submitted');
+      });
+  }, [user, profile?.user_type]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -82,7 +101,11 @@ const Profile = () => {
   }
 
   const isDriver = profile?.user_type === 'Driver';
-  const isVerified = profile?.verified === true;
+  // Passengers still use email-confirmation as "verified" — drivers use
+  // the admin-reviewed driver_verifications status instead.
+  const isVerified = isDriver
+    ? driverVerificationStatus === 'approved'
+    : profile?.verified === true;
 
   const displayName = profile?.full_name || 'User Name';
   const displayPhone = profile?.phone || '—';
@@ -172,12 +195,7 @@ const Profile = () => {
 
             <h2 className="text-xl font-bold text-gray-900">{displayName}</h2>
 
-            {isVerified && (
-              <div className="flex items-center gap-1 bg-[#0A7B44] text-white text-xs px-3 py-1 rounded-full mt-2">
-                <FaCircleCheck />
-                <span>Verified</span>
-              </div>
-            )}
+            <VerifiedBadge isDriver={isDriver} isVerified={isVerified} driverStatus={driverVerificationStatus} />
 
             {isDriver && (
               <div className="flex items-center gap-1 text-sm text-gray-600 mt-3">
@@ -218,7 +236,19 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Edit Profile — disabled for now, no route exists */}
+        {/* Verify Account — drivers only */}
+        {isDriver && (
+          <div className="px-6 mb-3">
+            <button
+              onClick={() => navigate('/verification')}
+              className="w-full py-4 rounded-xl font-semibold text-[#0A7B44] border-2 border-[#0A7B44] hover:bg-green-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <FaCircleCheck />
+              Verify Account
+            </button>
+          </div>
+        )}
+
         <div className="px-6 mb-8">
           <button
             onClick={() => navigate('/profile/edit')}
@@ -269,6 +299,35 @@ const Profile = () => {
     </div>
   );
 };
+
+function VerifiedBadge({ isDriver, isVerified, driverStatus }) {
+  if (isVerified) {
+    return (
+      <div className="flex items-center gap-1 bg-[#0A7B44] text-white text-xs px-3 py-1 rounded-full mt-2">
+        <FaCircleCheck />
+        <span>Verified</span>
+      </div>
+    );
+  }
+
+  // Driver mid-review gets a neutral "pending" look rather than red, since
+  // nothing has actually gone wrong yet — red is for not-submitted/declined.
+  if (isDriver && driverStatus === 'pending') {
+    return (
+      <div className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-xs px-3 py-1 rounded-full mt-2">
+        <FaClock />
+        <span>Pending verification</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full mt-2">
+      <FaCircleXmark />
+      <span>{isDriver && driverStatus === 'declined' ? 'Verification declined' : 'Unverified'}</span>
+    </div>
+  );
+}
 
 function DetailRow({ icon, text }) {
   return (

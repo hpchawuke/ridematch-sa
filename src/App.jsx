@@ -15,6 +15,8 @@ import MyTrips from './pages/MyTrips';
 import BookTrip from './pages/BookTrip';
 import DriverProfile from './pages/DriverProfile';
 import EditProfile from './pages/EditProfile';
+import DriverVerification from './pages/DriverVerification';
+import AdminVerifications from './pages/AdminVerifications';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -32,6 +34,8 @@ function AppRoutes() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/profile/edit" element={<EditProfile />} />
+        <Route path="/verification" element={<DriverVerification />} />
+        <Route path="/admin/verifications" element={<AdminVerifications />} />
 
 
         {/* Home Route */}
