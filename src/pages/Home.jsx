@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaRightFromBracket, FaClockRotateLeft, FaBell, FaToggleOn, FaToggleOff,
-  FaUser, FaTriangleExclamation,
+  FaUser, FaTriangleExclamation, FaShieldHalved,
   FaHouse, FaMagnifyingGlass, FaCalendarDays, FaCarSide
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
@@ -14,6 +14,20 @@ const Home = () => {
   const navigate = useNavigate();
   const { user, profile, loading } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
+
+  // Admin is independent of being a Driver or Passenger — checked
+  // separately so the entry point only shows for the handful of accounts
+  // actually in the admins table.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('admins')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setIsAdmin(Boolean(data)));
+  }, [user]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -51,13 +65,24 @@ const Home = () => {
               <p className="text-xs text-green-100">Welcome back, {isDriver ? 'driver' : 'passenger'}</p>
               <h1 className="text-xl font-bold">{firstName} 👋</h1>
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
-              title="Log out"
-            >
-              <FaRightFromBracket />
-            </button>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/admin/verifications')}
+                  className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
+                  title="Admin: Driver Verifications"
+                >
+                  <FaShieldHalved />
+                </button>
+              )}
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
+                title="Log out"
+              >
+                <FaRightFromBracket />
+              </button>
+            </div>
           </div>
 
           {!isVerified && (

@@ -236,8 +236,8 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Verify Account — drivers only */}
-        {isDriver && (
+        {/* Verify Account — drivers who aren't approved yet only */}
+        {isDriver && driverVerificationStatus !== 'approved' && (
           <div className="px-6 mb-3">
             <button
               onClick={() => navigate('/verification')}

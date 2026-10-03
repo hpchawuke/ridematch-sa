@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FaIdCard, FaCar, FaPhone, FaCheck, FaXmark, FaClock,
-  FaCircleCheck, FaCircleXmark
+  FaCircleCheck, FaCircleXmark, FaHouse
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 const TABS = ['pending', 'approved', 'declined'];
 
 const AdminVerifications = () => {
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(null); // null = not checked yet
   const [tab, setTab] = useState('pending');
@@ -122,7 +124,10 @@ const AdminVerifications = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 h-screen">
-      <div className="bg-[#0A7B44] text-white px-6 py-5">
+      <div className="bg-[#0A7B44] text-white px-6 py-5 flex items-center gap-3">
+        <button onClick={() => navigate('/home')} className="p-1">
+          <FaHouse />
+        </button>
         <h1 className="text-lg font-bold">Driver Verifications</h1>
       </div>
 
