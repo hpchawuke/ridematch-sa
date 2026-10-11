@@ -1,21 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  FaArrowLeft, FaLocationDot, FaClock, FaUser, FaPhone,
-  FaChair, FaNoteSticky, FaCircleCheck,
+  FaArrowLeft, FaLocationDot, FaClock, FaUser,
+  FaChair, FaNoteSticky, FaShieldHalved, FaChevronRight,
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { startCheckout } from '../lib/payments';
 
 export default function BookTrip() {
   const { tripId } = useParams();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
 
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -45,35 +45,26 @@ export default function BookTrip() {
     };
   }, [tripId]);
 
-  const handleRequestSeat = async () => {
+  // Creates the escrow payment and sends the passenger to TradeSafe's secure
+  // payment page. The seat request is only created once the payment goes
+  // through (see PaymentReturn).
+  const handlePayAndRequest = async () => {
     if (!user) return navigate('/login');
+    if (trip.driver_id === user.id) {
+      setErr("You can't book your own trip.");
+      return;
+    }
+
     setSubmitting(true);
     setErr('');
-    setMsg('');
 
-    const { error } = await supabase.from('bookings').insert({
-      trip_id: trip.id,
-      passenger_id: user.id,
-      passenger_name: profile?.full_name || user.email || 'Passenger',
-      passenger_phone: profile?.phone || null,
-      driver_id: trip.driver_id,
-      driver_name: trip.driver_name,
-      driver_phone: trip.driver_phone,
-      from_city: trip.from_city,
-      to_city: trip.to_city,
-      date: trip.date,
-      time: trip.time,
-      price: trip.price,
-      status: 'pending',
-    });
-
-    setSubmitting(false);
-
-    if (error) {
-      console.error(error);
-      setErr(error.message || 'Could not send request.');
-    } else {
-      setMsg('Request sent! The driver will confirm shortly.');
+    try {
+      await startCheckout(trip.id);
+      // The browser is now leaving for the payment page.
+    } catch (e) {
+      console.error(e);
+      setErr(e.message || 'Could not start the payment.');
+      setSubmitting(false);
     }
   };
 
@@ -100,7 +91,7 @@ export default function BookTrip() {
   }
 
   const seatsLeft = trip.seats_available ?? 0;
-  const isFull = seatsLeft <= 0;
+  const isFull = seatsLeft <= 0 || trip.status !== 'active';
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 h-screen">
@@ -142,19 +133,22 @@ export default function BookTrip() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
-          <h2 className="text-sm font-semibold text-gray-500 mb-3">DRIVER</h2>
-          <div className="flex items-center gap-2 text-sm text-gray-800 mb-2">
-            <FaUser className="text-gray-400" />
-            <span className="font-medium">{trip.driver_name || '—'}</span>
-          </div>
-          {trip.driver_phone && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <FaPhone className="text-gray-400" />
-              <span>{trip.driver_phone}</span>
+        {/* Driver: tap to see their profile. Their phone number is shared
+            only after they accept your request. */}
+        <button
+          type="button"
+          onClick={() => navigate(`/driver/${trip.driver_id}`)}
+          className="w-full text-left bg-white rounded-2xl shadow-sm p-5 mb-4 flex items-center justify-between hover:bg-gray-50"
+        >
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 mb-2">DRIVER</h2>
+            <div className="flex items-center gap-2 text-sm text-gray-800">
+              <FaUser className="text-gray-400" />
+              <span className="font-medium">{trip.driver_name || '—'}</span>
             </div>
-          )}
-        </div>
+          </div>
+          <FaChevronRight className="text-gray-300" />
+        </button>
 
         <div className="bg-white rounded-2xl shadow-sm p-5 mb-4 flex items-center justify-between">
           <span className="text-sm text-gray-500">Price per seat</span>
@@ -170,30 +164,34 @@ export default function BookTrip() {
           </div>
         )}
 
+        {/* How the payment works */}
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-4">
+          <p className="flex items-center gap-2 text-sm font-semibold text-[#0A7B44] mb-1">
+            <FaShieldHalved /> Your payment is protected
+          </p>
+          <p className="text-xs text-gray-600">
+            You pay now and the money is held safely in escrow. The driver only
+            gets paid after your ride. If the driver declines, or you cancel
+            before departure, you are refunded in full.
+          </p>
+        </div>
+
         {err && (
           <div className="bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl p-3 mb-4">
             {err}
           </div>
         )}
-        {msg && (
-          <div className="bg-green-50 border border-green-100 text-green-700 text-sm rounded-xl p-3 mb-4 flex items-center gap-2">
-            <FaCircleCheck />
-            {msg}
-          </div>
-        )}
 
         <button
-          onClick={handleRequestSeat}
-          disabled={submitting || isFull || !!msg}
+          onClick={handlePayAndRequest}
+          disabled={submitting || isFull}
           className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isFull
             ? 'Trip is full'
-            : msg
-            ? 'Request sent'
             : submitting
-            ? 'Sending request…'
-            : 'Request Seat'}
+            ? 'Opening secure payment…'
+            : `Pay R${trip.price} & Request Seat`}
         </button>
       </div>
     </div>

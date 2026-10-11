@@ -1,18 +1,48 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaLocationDot, FaCalendarDays, FaClock, FaUsers,
-  FaChevronDown, FaChevronUp, FaPhone, FaCheck, FaXmark
+  FaChevronDown, FaChevronUp, FaPhone, FaCheck, FaXmark, FaClockRotateLeft
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { bookingAction } from '../lib/payments';
 
+// Departure as a real time. Trips are stored as a date plus "HH:MM" in
+// South African time (always UTC+2).
+function departureOf(trip) {
+  return new Date(`${trip.date}T${String(trip.time).slice(0, 5)}:00+02:00`).getTime();
+}
+
 const MyTrips = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [trips, setTrips] = useState([]);
+  const [pendingByTrip, setPendingByTrip] = useState({});
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(Date.now());
+  const [showRecent, setShowRecent] = useState(false);
+
+  // How many paid requests are still waiting for an answer, per trip, so the
+  // "new" counts show even before a trip card is opened.
+  const fetchPending = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('trip_id')
+      .eq('driver_id', user.id)
+      .eq('status', 'pending');
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+    const counts = {};
+    (data || []).forEach((r) => {
+      counts[r.trip_id] = (counts[r.trip_id] || 0) + 1;
+    });
+    setPendingByTrip(counts);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -33,8 +63,9 @@ const MyTrips = () => {
     };
 
     fetchTrips();
+    fetchPending();
 
-    const channel = supabase
+    const tripsChannel = supabase
       .channel(`trips-driver-${user.id}`)
       .on(
         'postgres_changes',
@@ -43,10 +74,43 @@ const MyTrips = () => {
       )
       .subscribe();
 
+    const bookingsChannel = supabase
+      .channel(`bookings-driver-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `driver_id=eq.${user.id}` },
+        fetchPending
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(tripsChannel);
+      supabase.removeChannel(bookingsChannel);
     };
-  }, [user]);
+  }, [user, fetchPending]);
+
+  // Keeps the groups accurate while the page stays open
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Upcoming: trips that haven't departed yet, soonest first.
+  // Recent trips: trips whose departure has passed, newest first.
+  const { upcoming, recent } = useMemo(() => {
+    const up = [];
+    const past = [];
+    for (const t of trips) {
+      const dep = departureOf(t);
+      (dep < now ? past : up).push({ t, dep });
+    }
+    up.sort((a, b) => a.dep - b.dep);
+    past.sort((a, b) => b.dep - a.dep);
+    return { upcoming: up.map((x) => x.t), recent: past.map((x) => x.t) };
+  }, [trips, now]);
+
+  // Requests waiting on an answer across all upcoming trips
+  const newRequests = upcoming.reduce((sum, t) => sum + (pendingByTrip[t.id] || 0), 0);
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 h-screen">
@@ -65,7 +129,7 @@ const MyTrips = () => {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-3">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {loading && <p className="text-center text-sm text-gray-400">Loading…</p>}
 
         {!loading && trips.length === 0 && (
@@ -80,15 +144,72 @@ const MyTrips = () => {
           </div>
         )}
 
-        {trips.map((t) => (
-          <TripCard key={t.id} trip={t} />
-        ))}
+        {/* Upcoming */}
+        {!loading && trips.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-semibold text-gray-500 tracking-wide">UPCOMING</h2>
+              {newRequests > 0 && (
+                <span className="h-5 px-2 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center">
+                  {newRequests} new {newRequests === 1 ? 'request' : 'requests'}
+                </span>
+              )}
+            </div>
+
+            {upcoming.length === 0 && (
+              <div className="bg-white rounded-2xl shadow-sm p-5 text-center">
+                <p className="text-sm text-gray-400 mb-3">No upcoming trips.</p>
+                <button
+                  onClick={() => navigate('/post-ride')}
+                  className="py-2 px-4 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] text-sm"
+                >
+                  Post a trip
+                </button>
+              </div>
+            )}
+
+            {upcoming.map((t) => (
+              <TripCard
+                key={t.id}
+                trip={t}
+                pending={pendingByTrip[t.id] || 0}
+                onChanged={fetchPending}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Recent trips */}
+        {recent.length > 0 && (
+          <div className="space-y-3">
+            <button
+              onClick={() => setShowRecent((v) => !v)}
+              className="w-full flex items-center justify-between bg-white rounded-2xl shadow-sm px-5 py-4"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                <FaClockRotateLeft className="text-gray-400" />
+                Recent trips
+                <span className="text-xs font-medium text-gray-400">({recent.length})</span>
+              </span>
+              {showRecent ? <FaChevronUp className="text-gray-400" /> : <FaChevronDown className="text-gray-400" />}
+            </button>
+
+            {showRecent && recent.map((t) => (
+              <TripCard
+                key={t.id}
+                trip={t}
+                pending={pendingByTrip[t.id] || 0}
+                onChanged={fetchPending}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-function TripCard({ trip }) {
+function TripCard({ trip, pending = 0, onChanged }) {
   const [expanded, setExpanded] = useState(false);
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -111,7 +232,11 @@ function TripCard({ trip }) {
     setLoadingRequests(false);
   }, [trip.id]);
 
-  const refetch = fetchRequests;
+  // Refresh this card's list and the page-level counts after an action
+  const refetch = async () => {
+    await fetchRequests();
+    if (onChanged) await onChanged();
+  };
 
   useEffect(() => {
     if (!expanded) return;
@@ -178,7 +303,10 @@ function TripCard({ trip }) {
     }
   };
 
-  const pendingCount = requests.filter((r) => r.status === 'pending').length;
+  // Use the live list once the card has been opened, the page-level count before that
+  const pendingCount = expanded && !loadingRequests
+    ? requests.filter((r) => r.status === 'pending').length
+    : pending;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
