@@ -4,7 +4,7 @@ import {
   FaArrowLeft, FaCircleCheck, FaCircleXmark, FaStar, FaCarSide,
   FaLocationDot, FaClock, FaUser, FaPhone, FaEnvelope,
   FaRightFromBracket, FaHouse, FaMagnifyingGlass,
-  FaCalendarDays, FaPenToSquare, FaCamera
+  FaCalendarDays, FaPenToSquare, FaCamera, FaBuildingColumns
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -245,6 +245,19 @@ const Profile = () => {
             >
               <FaCircleCheck />
               Verify Account
+            </button>
+          </div>
+        )}
+
+        {/* Payout details: verified drivers add the bank account they get paid into */}
+        {isDriver && driverVerificationStatus === 'approved' && (
+          <div className="px-6 mb-3">
+            <button
+              onClick={() => navigate('/payout-setup')}
+              className="w-full py-4 rounded-xl font-semibold text-[#0A7B44] border-2 border-[#0A7B44] hover:bg-green-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <FaBuildingColumns />
+              Payout details
             </button>
           </div>
         )}

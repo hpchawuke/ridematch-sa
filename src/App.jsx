@@ -17,6 +17,8 @@ import DriverProfile from './pages/DriverProfile';
 import EditProfile from './pages/EditProfile';
 import DriverVerification from './pages/DriverVerification';
 import AdminVerifications from './pages/AdminVerifications';
+import PaymentReturn from './pages/PaymentReturn';
+import PayoutSetup from './pages/PayoutSetup';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -36,6 +38,8 @@ function AppRoutes() {
         <Route path="/profile/edit" element={<EditProfile />} />
         <Route path="/verification" element={<DriverVerification />} />
         <Route path="/admin/verifications" element={<AdminVerifications />} />
+        <Route path="/payment/return" element={<PaymentReturn />} />
+        <Route path="/payout-setup" element={<PayoutSetup />} />
 
 
         {/* Home Route */}

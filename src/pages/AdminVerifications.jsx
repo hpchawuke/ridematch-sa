@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { bookingAction } from '../lib/payments';
 
 const TABS = ['pending', 'approved', 'declined'];
 
@@ -17,6 +18,7 @@ const AdminVerifications = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
+  const [section, setSection] = useState('verifications'); // verifications | disputes
 
   // Confirm admin status before doing anything else
   useEffect(() => {
@@ -128,9 +130,27 @@ const AdminVerifications = () => {
         <button onClick={() => navigate('/home')} className="p-1">
           <FaHouse />
         </button>
-        <h1 className="text-lg font-bold">Driver Verifications</h1>
+        <h1 className="text-lg font-bold">Admin</h1>
       </div>
 
+      <div className="flex border-b border-gray-100 bg-white">
+        {[['verifications', 'Driver verifications'], ['disputes', 'Payment disputes']].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setSection(key)}
+            className={`flex-1 py-3 text-sm font-semibold border-b-2 ${
+              section === key ? 'border-[#0A7B44] text-[#0A7B44]' : 'border-transparent text-gray-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'disputes' ? (
+        <DisputesPanel />
+      ) : (
+        <>
       <div className="flex gap-2 px-6 py-3 bg-white border-b border-gray-100">
         {TABS.map((t) => (
           <button
@@ -214,9 +234,118 @@ const AdminVerifications = () => {
           </div>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 };
+
+function DisputesPanel() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null);
+
+  const fetchRows = async () => {
+    const { data, error } = await supabase
+      .from('payments')
+      .select(`
+        id, amount, status, dispute_reason, created_at, paid_at, tradesafe_transaction_id,
+        passenger:users!payments_passenger_public_fkey(full_name, phone),
+        driver:users!payments_driver_public_fkey(full_name, phone),
+        booking:bookings(from_city, to_city, date, time)
+      `)
+      .eq('status', 'disputed')
+      .order('created_at', { ascending: true });
+
+    if (error) console.error(error);
+    else setRows(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchRows();
+    const channel = supabase
+      .channel('admin-payment-disputes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, fetchRows)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const resolve = async (row, action) => {
+    const message = action === 'admin_release'
+      ? `Release R${row.amount} to the driver? This cannot be undone.`
+      : `Refund R${row.amount} to the passenger? This cannot be undone.`;
+    if (!window.confirm(message)) return;
+
+    try {
+      setBusy(row.id);
+      await bookingAction(action, { payment_id: row.id });
+      await fetchRows();
+    } catch (err) {
+      alert(err.message || 'Could not complete that.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 space-y-3">
+      {loading && <p className="text-center text-sm text-gray-400">Loading…</p>}
+      {!loading && rows.length === 0 && (
+        <p className="text-center text-sm text-gray-400 py-10">No open payment disputes.</p>
+      )}
+
+      {rows.map((row) => {
+        const trip = Array.isArray(row.booking) ? row.booking[0] : row.booking;
+        return (
+          <div key={row.id} className="bg-white rounded-2xl shadow-sm p-5 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-gray-900">
+                {trip ? `${trip.from_city} → ${trip.to_city}` : 'Trip'}
+              </p>
+              <span className="font-bold text-[#0A7B44]">R {row.amount}</span>
+            </div>
+            {trip && <p className="text-xs text-gray-500">{trip.date} · {trip.time}</p>}
+
+            <p className="text-xs text-gray-600">
+              <span className="text-gray-400">Passenger:</span> {row.passenger?.full_name} {row.passenger?.phone && `· ${row.passenger.phone}`}
+            </p>
+            <p className="text-xs text-gray-600">
+              <span className="text-gray-400">Driver:</span> {row.driver?.full_name} {row.driver?.phone && `· ${row.driver.phone}`}
+            </p>
+
+            <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-xs text-orange-800">
+              {row.dispute_reason}
+            </div>
+
+            <p className="text-[11px] text-gray-400 break-all">
+              TradeSafe transaction: {row.tradesafe_transaction_id}
+            </p>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => resolve(row, 'admin_release')}
+                disabled={busy === row.id}
+                className="flex-1 py-2 rounded-lg bg-[#0A7B44] text-white text-xs font-semibold hover:bg-[#065F33] disabled:opacity-50"
+              >
+                Release to driver
+              </button>
+              <button
+                onClick={() => resolve(row, 'admin_refund')}
+                disabled={busy === row.id}
+                className="flex-1 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+              >
+                Refund passenger
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function StatusBadge({ status }) {
   if (status === 'approved') {

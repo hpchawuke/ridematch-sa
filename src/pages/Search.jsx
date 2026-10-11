@@ -6,13 +6,14 @@ import {
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { startCheckout } from '../lib/payments';
 
 const GAUTENG = ['Johannesburg', 'Pretoria', 'Midrand', 'Soweto', 'Tembisa'];
 const LIMPOPO = ['Polokwane', 'Mokopane', 'Thohoyandou', 'Musina', 'Tzaneen', 'Lebowakgomo'];
 
 const Search = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
 
   const [fromCity, setFromCity] = useState('');
   const [toCity, setToCity] = useState('');
@@ -55,32 +56,19 @@ const Search = () => {
       alert('No seats left on this trip.');
       return;
     }
+    const ok = window.confirm(
+      `Pay R${trip.price} to request this seat?\n\nYou'll be taken to a secure payment page. The money is held in escrow and only released to the driver after your ride. If the driver declines, or you cancel before departure, you get a full refund.`
+    );
+    if (!ok) return;
+
     try {
       setBooking(trip.id);
-      const { error } = await supabase.from('bookings').insert({
-        trip_id: trip.id,
-        passenger_id: user.id,
-        passenger_name: profile?.full_name || user.email,
-        passenger_phone: profile?.phone || '',
-        driver_id: trip.driver_id,
-        driver_name: trip.driver_name,
-        driver_phone: trip.driver_phone || '',
-        from_city: trip.from_city,
-        to_city: trip.to_city,
-        date: trip.date,
-        time: trip.time,
-        price: trip.price,
-        status: 'pending',
-      });
-
-      if (error) throw error;
-
-      alert('Seat requested! Waiting for driver to confirm.');
-      navigate('/bookings');
+      // Creates the escrow payment and redirects to the payment page.
+      // The booking itself is created once the payment goes through.
+      await startCheckout(trip.id);
     } catch (err) {
       console.error(err);
-      alert('Failed to request seat.');
-    } finally {
+      alert(err.message || 'Could not start the payment.');
       setBooking(null);
     }
   };
@@ -190,10 +178,10 @@ const Search = () => {
               className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] transition-colors disabled:opacity-50"
             >
               {booking === trip.id
-                ? 'Requesting…'
+                ? 'Opening payment…'
                 : trip.seats_available <= 0
                   ? 'Full'
-                  : 'Request Seat'}
+                  : `Pay R${trip.price} & Request Seat`}
             </button>
           </div>
         ))}

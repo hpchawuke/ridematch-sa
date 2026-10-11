@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaLocationDot, FaCalendarDays, FaClock, FaUsers,
@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { bookingAction } from '../lib/payments';
 
 const MyTrips = () => {
   const navigate = useNavigate();
@@ -94,24 +95,26 @@ function TripCard({ trip }) {
   const [busy, setBusy] = useState(null);
   const isFull = trip.status === 'full';
 
+  const fetchRequests = useCallback(async () => {
+    setLoadingRequests(true);
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('trip_id', trip.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error(error);
+    } else {
+      setRequests(data || []);
+    }
+    setLoadingRequests(false);
+  }, [trip.id]);
+
+  const refetch = fetchRequests;
+
   useEffect(() => {
     if (!expanded) return;
-
-    const fetchRequests = async () => {
-      setLoadingRequests(true);
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('trip_id', trip.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error(error);
-      } else {
-        setRequests(data || []);
-      }
-      setLoadingRequests(false);
-    };
 
     fetchRequests();
 
@@ -127,22 +130,18 @@ function TripCard({ trip }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [expanded, trip.id]);
+  }, [expanded, trip.id, fetchRequests]);
 
   const handleAccept = async (booking) => {
     try {
       setBusy(booking.id);
 
-      // One atomic call: checks the seat is still free, accepts this
-      // booking, decrements seats, and — if that was the last seat —
-      // marks the trip 'full' and bumps every other pending request on
-      // it to 'full' too, server-side. Row updates arrive via the
-      // realtime subscription above, so no manual refetch needed here.
-      const { error } = await supabase.rpc('accept_booking', {
-        p_booking_id: booking.id,
-      });
-
-      if (error) throw error;
+      // Server-side: checks the payment is held in escrow and a seat is
+      // still free, accepts, takes a seat off the trip and, if that was the
+      // last seat, marks it 'full' and refunds everyone still waiting.
+      // The money stays in escrow until the passenger completes the ride.
+      await bookingAction('accept', { booking_id: booking.id });
+      await refetch();
     } catch (err) {
       console.error(err);
       alert('Failed to accept: ' + (err.message || 'Unknown error'));
@@ -152,16 +151,28 @@ function TripCard({ trip }) {
   };
 
   const handleDecline = async (booking) => {
+    if (!window.confirm('Decline this request? The passenger will be notified and refunded in full.')) return;
     try {
       setBusy(booking.id);
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'declined' })
-        .eq('id', booking.id);
-      if (error) throw error;
+      await bookingAction('decline', { booking_id: booking.id });
+      await refetch();
     } catch (err) {
       console.error(err);
       alert('Failed to decline: ' + (err.message || 'Unknown error'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCancelRide = async (booking) => {
+    if (!window.confirm('Cancel this passenger\'s seat? They will be refunded in full.')) return;
+    try {
+      setBusy(booking.id);
+      await bookingAction('cancel', { booking_id: booking.id });
+      await refetch();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to cancel: ' + (err.message || 'Unknown error'));
     } finally {
       setBusy(null);
     }
@@ -230,6 +241,26 @@ function TripCard({ trip }) {
                   <FaPhone className="text-gray-400" /> {r.passenger_phone}
                 </p>
               )}
+              {['pending', 'accepted'].includes(r.status) && (
+                <p className="text-xs text-[#0A7B44] mt-1">R {r.price} paid · held in escrow</p>
+              )}
+              {r.status === 'completed' && (
+                <p className="text-xs text-gray-500 mt-1">R {r.price} released to you</p>
+              )}
+              {r.status === 'disputed' && (
+                <p className="text-xs text-orange-600 mt-1">Passenger reported a problem. Payment on hold while an admin reviews it.</p>
+              )}
+
+              {r.status === 'accepted' && (
+                <button
+                  type="button"
+                  onClick={() => handleCancelRide(r)}
+                  disabled={busy === r.id}
+                  className="mt-3 w-full py-2 rounded-lg border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50"
+                >
+                  Cancel this passenger (they are refunded)
+                </button>
+              )}
 
               {r.status === 'pending' && (
                 <div className="flex gap-2 mt-3">
@@ -264,10 +295,19 @@ function RequestBadge({ status }) {
     return <span className="text-xs text-green-600 font-medium">Accepted</span>;
   }
   if (status === 'declined') {
-    return <span className="text-xs text-red-500 font-medium">Declined</span>;
+    return <span className="text-xs text-red-500 font-medium">Declined · refunded</span>;
   }
   if (status === 'full') {
-    return <span className="text-xs text-gray-500 font-medium">Ride full</span>;
+    return <span className="text-xs text-gray-500 font-medium">Ride full · refunded</span>;
+  }
+  if (status === 'cancelled') {
+    return <span className="text-xs text-gray-500 font-medium">Cancelled · refunded</span>;
+  }
+  if (status === 'completed') {
+    return <span className="text-xs text-green-600 font-medium">Completed</span>;
+  }
+  if (status === 'disputed') {
+    return <span className="text-xs text-orange-600 font-medium">Disputed</span>;
   }
   return <span className="text-xs text-yellow-600 font-medium">Pending</span>;
 }
