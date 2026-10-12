@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaLocationDot, FaCalendarDays, FaClock, FaUsers,
-  FaChevronDown, FaChevronUp, FaPhone, FaCheck, FaXmark, FaClockRotateLeft
+  FaChevronDown, FaChevronUp, FaTriangleExclamation, FaCheck, FaXmark, FaClockRotateLeft
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { bookingAction } from '../lib/payments';
+import ContactDetails, { isOnOrAfterDate } from '../components/ContactDetails';
 
 // Departure as a real time. Trips are stored as a date plus "HH:MM" in
 // South African time (always UTC+2).
@@ -364,9 +365,19 @@ function TripCard({ trip, pending = 0, onChanged }) {
                 <span className="font-medium text-gray-900">{r.passenger_name}</span>
                 <RequestBadge status={r.status} />
               </div>
-              {r.passenger_phone && (
-                <p className="flex items-center gap-1 text-xs text-gray-500">
-                  <FaPhone className="text-gray-400" /> {r.passenger_phone}
+              {/* The passenger's number is only shared on the departure date */}
+              {['accepted', 'disputed'].includes(r.status) && (
+                <ContactDetails
+                  bookingId={r.id}
+                  name={r.passenger_name}
+                  tripDate={r.date}
+                  lockedMessage="You will be able to call/message the passenger on the departure date. On that day their contact details will appear here."
+                />
+              )}
+              {r.status === 'accepted' && isOnOrAfterDate(r.date) && (
+                <p className="mt-3 flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <FaTriangleExclamation className="mt-0.5 flex-shrink-0 text-amber-500" />
+                  <span>Once the passengers are in your car, tell them to confirm the trip so that you receive the payment.</span>
                 </p>
               )}
               {['pending', 'accepted'].includes(r.status) && (

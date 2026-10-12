@@ -17,7 +17,7 @@ const DriverProfile = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, full_name, user_type, verified, created_at, avatar_url, vehicle, route, rating, trips, about_me')
         .eq('id', driverId)
         .eq('user_type', 'Driver')
         .maybeSingle();

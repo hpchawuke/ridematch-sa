@@ -10,7 +10,7 @@ import { corsHeaders, errorResponse, HttpError, json } from '../_shared/http.ts'
 import { adminClient, isAdmin, requireUser } from '../_shared/supabase.ts';
 import * as ts from '../_shared/tradesafe.ts';
 import {
-  EARLY_MS, WINDOW_MS, loadPayment, loadPaymentForBooking, refundPayment,
+  WINDOW_MS, departureDayStart, loadPayment, loadPaymentForBooking, refundPayment,
   releasePayment, syncPayment, type Payment,
 } from '../_shared/payments.ts';
 
@@ -66,6 +66,7 @@ Deno.serve(async (req) => {
     const payment = await loadPaymentForBooking(admin, bookingId);
     const departure = payment.departure_at ? new Date(payment.departure_at).getTime() : NaN;
     const now = Date.now();
+    const dayStart = departureDayStart(departure);
 
     // ---- accept ----
     if (action === 'accept') {
@@ -108,8 +109,19 @@ Deno.serve(async (req) => {
         throw new HttpError(409, 'This booking can no longer be cancelled.');
       }
       if (payment.status !== 'held') throw new HttpError(409, `This payment is ${payment.status}.`);
-      if (isPassenger && !(departure > now)) {
-        throw new HttpError(409, 'The trip has already departed. Use "Report a problem" if something went wrong.');
+      if (isPassenger) {
+        // An accepted trip can be cancelled until the departure date begins.
+        // A request the driver hasn't answered yet can be withdrawn until
+        // the departure time.
+        if (booking.status === 'accepted' && !(now < dayStart)) {
+          throw new HttpError(
+            409,
+            'The departure date has been reached, so this trip can no longer be cancelled. Use "Report a problem" if something goes wrong.',
+          );
+        }
+        if (booking.status === 'pending' && !(departure > now)) {
+          throw new HttpError(409, 'This trip has already departed.');
+        }
       }
       await refundPayment(
         admin, payment, 'cancelled',
@@ -123,8 +135,8 @@ Deno.serve(async (req) => {
       if (!isPassenger) throw new HttpError(403, 'Only the passenger can do this.');
       if (booking.status !== 'accepted') throw new HttpError(409, 'The driver has not accepted this booking.');
       if (payment.status !== 'held') throw new HttpError(409, `This payment is ${payment.status}.`);
-      if (!(now >= departure - EARLY_MS)) {
-        throw new HttpError(409, 'You can do this once it is time for the trip to depart.');
+      if (!(now >= dayStart)) {
+        throw new HttpError(409, 'You can confirm the trip once the departure date is reached.');
       }
       if (now > departure + WINDOW_MS) {
         throw new HttpError(409, 'The 24-hour window has passed, so the payment is being released automatically.');

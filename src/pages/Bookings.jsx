@@ -2,14 +2,20 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaCalendarDays, FaLocationDot, FaClock,
-  FaPhone, FaShieldHalved, FaChevronDown, FaChevronUp, FaClockRotateLeft, FaCircleXmark
+  FaShieldHalved, FaTriangleExclamation, FaChevronDown, FaChevronUp, FaClockRotateLeft, FaCircleXmark
 } from 'react-icons/fa6';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { bookingAction } from '../lib/payments';
+import ContactDetails from '../components/ContactDetails';
 
-const EARLY_MS = 60 * 60 * 1000;      // can confirm / report from 1h before departure
-const WINDOW_MS = 24 * 60 * 60 * 1000; // ...until 24h after, then auto-released
+const WINDOW_MS = 24 * 60 * 60 * 1000; // confirm / report until 24h after departure, then auto-released
+const SAST_OFFSET_MS = 2 * 60 * 60 * 1000; // South Africa is always UTC+2
+
+// Midnight (South African time) at the start of the departure day
+function departureDayStart(departureMs) {
+  return Math.floor((departureMs + SAST_OFFSET_MS) / 86400000) * 86400000 - SAST_OFFSET_MS;
+}
 
 const seenKey = (userId) => `ridematch:seenDeclines:${userId}`;
 
@@ -260,8 +266,11 @@ function BookingCard({ booking: b, onChanged }) {
 
   const payment = Array.isArray(b.payment) ? b.payment[0] : b.payment;
   const departure = departureOf(b, payment);
+  const dayStart = departureDayStart(departure);
   const beforeDeparture = now < departure;
-  const rideWindowOpen = now >= departure - EARLY_MS && now <= departure + WINDOW_MS;
+  const beforeDepartureDay = now < dayStart;
+  // From the start of the departure day until 24h after departure
+  const rideWindowOpen = now >= dayStart && now <= departure + WINDOW_MS;
   const paymentHeld = payment?.status === 'held';
 
   const run = async (action, payload, doneMessage) => {
@@ -278,13 +287,13 @@ function BookingCard({ booking: b, onChanged }) {
   };
 
   const handleCancel = () => {
-    if (!window.confirm('Cancel this booking? You will get a full refund.')) return;
+    if (!window.confirm('Cancel this booking? You will get a full refund. Once the departure date is reached you will not be able to cancel.')) return;
     run('cancel', {}, 'Booking cancelled. Your refund is on its way.');
   };
 
   const handleComplete = () => {
-    if (!window.confirm(`Only tap this once you are in the car. It releases R${b.price} to the driver and can't be undone.`)) return;
-    run('complete', {}, 'Ride complete. The driver has been paid. Thank you!');
+    if (!window.confirm(`Only confirm once you are in the car. This releases R${b.price} to the driver and can't be undone.`)) return;
+    run('complete', {}, 'Trip confirmed. The driver has been paid. Thank you!');
   };
 
   const handleDispute = () => {
@@ -331,14 +340,9 @@ function BookingCard({ booking: b, onChanged }) {
 
       <PaymentLine status={payment?.status} />
 
-      {/* Driver's number only appears once they've accepted the request */}
-      {['accepted', 'disputed'].includes(b.status) && b.driver_phone && (
-        <a
-          href={`tel:${b.driver_phone}`}
-          className="mt-3 flex items-center justify-center gap-2 py-2 rounded-xl border border-[#0A7B44] text-[#0A7B44] text-sm font-medium hover:bg-green-50"
-        >
-          <FaPhone /> Call {b.driver_phone}
-        </a>
+      {/* The driver's number is only shared on the departure date */}
+      {['accepted', 'disputed'].includes(b.status) && (
+        <ContactDetails bookingId={b.id} name={b.driver_name} tripDate={b.date} />
       )}
 
       {b.status === 'pending' && (
@@ -369,26 +373,45 @@ function BookingCard({ booking: b, onChanged }) {
         </p>
       )}
 
-      {/* Cancel: any time before departure while the money is still held */}
-      {['pending', 'accepted'].includes(b.status) && paymentHeld && beforeDeparture && (
+      {/* Waiting for the driver: can still withdraw until departure time */}
+      {b.status === 'pending' && paymentHeld && beforeDeparture && (
         <button
           onClick={handleCancel}
           disabled={busy}
           className="mt-3 w-full py-2 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
         >
-          {b.status === 'pending' ? 'Cancel request (full refund)' : 'Cancel booking (full refund)'}
+          Cancel request (full refund)
         </button>
       )}
 
-      {/* Complete Ride / Report a problem: from departure time */}
+      {/* Accepted, days before departure: cancel + warning */}
+      {b.status === 'accepted' && paymentHeld && beforeDepartureDay && (
+        <div className="mt-3 space-y-2">
+          <button
+            onClick={handleCancel}
+            disabled={busy}
+            className="w-full py-2 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50"
+          >
+            Cancel ride (full refund)
+          </button>
+          <Warning>
+            Once the departure date is reached you will not be able to cancel a trip. On that day you will be able to call/message the driver to give them your specific pick-up location.
+          </Warning>
+        </div>
+      )}
+
+      {/* Departure day: Confirm trip replaces Cancel */}
       {b.status === 'accepted' && paymentHeld && rideWindowOpen && (
         <div className="mt-3 space-y-2">
+          <Warning>
+            You can only click Confirm Trip after you are in the car. Before that, wait for the communication from the driver.
+          </Warning>
           <button
             onClick={handleComplete}
             disabled={busy}
             className="w-full py-3 rounded-xl font-semibold text-white bg-[#0A7B44] hover:bg-[#065F33] disabled:opacity-50"
           >
-            {busy ? 'Please wait…' : 'Complete Ride'}
+            {busy ? 'Please wait…' : 'Confirm Trip'}
           </button>
           <button
             onClick={handleDispute}
@@ -403,6 +426,15 @@ function BookingCard({ booking: b, onChanged }) {
         </div>
       )}
     </div>
+  );
+}
+
+function Warning({ children }) {
+  return (
+    <p className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+      <FaTriangleExclamation className="mt-0.5 flex-shrink-0 text-amber-500" />
+      <span>{children}</span>
+    </p>
   );
 }
 

@@ -3,10 +3,21 @@ import { HttpError } from './http.ts';
 import * as ts from './tradesafe.ts';
 
 export const COMMISSION_PERCENT = 10;
-// Passengers can confirm / report a problem from this long before departure...
-export const EARLY_MS = 60 * 60 * 1000;
-// ...until this long after departure, when the money auto-releases.
+// After departure, passengers have this long to confirm or report a problem,
+// then the money is released automatically.
 export const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// South Africa has no daylight saving, so local time is always UTC+2.
+const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
+
+// Midnight at the start of the departure day, South African time. From this
+// moment the trip is "on its departure date": contact details unlock, the
+// passenger can no longer cancel an accepted trip, and they can confirm it.
+export function departureDayStart(departureMs: number): number {
+  const local = new Date(departureMs + SAST_OFFSET_MS);
+  local.setUTCHours(0, 0, 0, 0);
+  return local.getTime() - SAST_OFFSET_MS;
+}
 
 export type Payment = {
   id: string;

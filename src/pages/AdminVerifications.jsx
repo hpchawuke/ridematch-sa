@@ -39,7 +39,7 @@ const AdminVerifications = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('driver_verifications')
-        .select('*, driver:users!driver_verifications_driver_public_fkey(full_name, phone)')
+        .select('*, driver:users!driver_verifications_driver_public_fkey(full_name)')
         .eq('status', tab)
         .order('created_at', { ascending: true });
 
@@ -181,11 +181,7 @@ const AdminVerifications = () => {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="font-semibold text-gray-900">{row.driver?.full_name || 'Unknown driver'}</p>
-                {row.driver?.phone && (
-                  <p className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
-                    <FaPhone className="text-gray-400" /> {row.driver.phone}
-                  </p>
-                )}
+                <AdminPhone userId={row.driver_id} />
               </div>
               <StatusBadge status={row.status} />
             </div>
@@ -250,8 +246,9 @@ function DisputesPanel() {
       .from('payments')
       .select(`
         id, amount, status, dispute_reason, created_at, paid_at, tradesafe_transaction_id,
-        passenger:users!payments_passenger_public_fkey(full_name, phone),
-        driver:users!payments_driver_public_fkey(full_name, phone),
+        passenger_id, driver_id,
+        passenger:users!payments_passenger_public_fkey(full_name),
+        driver:users!payments_driver_public_fkey(full_name),
         booking:bookings(from_city, to_city, date, time)
       `)
       .eq('status', 'disputed')
@@ -310,10 +307,10 @@ function DisputesPanel() {
             {trip && <p className="text-xs text-gray-500">{trip.date} · {trip.time}</p>}
 
             <p className="text-xs text-gray-600">
-              <span className="text-gray-400">Passenger:</span> {row.passenger?.full_name} {row.passenger?.phone && `· ${row.passenger.phone}`}
+              <span className="text-gray-400">Passenger:</span> {row.passenger?.full_name} <AdminPhone userId={row.passenger_id} inline />
             </p>
             <p className="text-xs text-gray-600">
-              <span className="text-gray-400">Driver:</span> {row.driver?.full_name} {row.driver?.phone && `· ${row.driver.phone}`}
+              <span className="text-gray-400">Driver:</span> {row.driver?.full_name} <AdminPhone userId={row.driver_id} inline />
             </p>
 
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-xs text-orange-800">
@@ -344,6 +341,31 @@ function DisputesPanel() {
         );
       })}
     </div>
+  );
+}
+
+// Admins read phone numbers through a server check (admin_get_user_phone),
+// because phone numbers are no longer readable straight from the users table.
+function AdminPhone({ userId, inline = false }) {
+  const [phone, setPhone] = useState(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    supabase.rpc('admin_get_user_phone', { p_user_id: userId }).then(({ data, error }) => {
+      if (!cancelled && !error) setPhone(data || null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  if (!phone) return null;
+  if (inline) return <span>· {phone}</span>;
+  return (
+    <p className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+      <FaPhone className="text-gray-400" /> {phone}
+    </p>
   );
 }
 

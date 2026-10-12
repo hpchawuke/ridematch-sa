@@ -134,7 +134,7 @@ export default function BookTrip() {
         </div>
 
         {/* Driver: tap to see their profile. Their phone number is shared
-            only after they accept your request. */}
+            only on the departure date, once they accept your request. */}
         <button
           type="button"
           onClick={() => navigate(`/driver/${trip.driver_id}`)}

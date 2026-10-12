@@ -15,11 +15,23 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', currentUser.id)
-        .single();
+      // Your own full profile (phone and email included) comes from
+      // get_my_profile(); other people's phone numbers are no longer readable.
+      // Falls back to a plain read if that function isn't installed yet.
+      let data = null;
+      let error = null;
+      const rpc = await supabase.rpc('get_my_profile');
+      if (!rpc.error) {
+        data = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+      } else {
+        const res = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', currentUser.id)
+          .single();
+        data = res.data;
+        error = res.error;
+      }
 
       if (error) {
         console.error('❌ Profile fetch failed:', error.message);
