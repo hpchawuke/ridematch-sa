@@ -2,12 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FaCircleCheck, FaCircleXmark, FaSpinner } from 'react-icons/fa6';
 import { bookingAction } from '../lib/payments';
+import { useAuth } from '../context/AuthContext';
 
 // TradeSafe sends the passenger back here after the payment page. Set this
 // page's address as both the success and failure URL in your TradeSafe
 // application settings, e.g. https://your-site.com/payment/return
 const PaymentReturn = () => {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const [bookingId, setBookingId] = useState(null);
   const [params] = useSearchParams();
   const [phase, setPhase] = useState('checking'); // checking | done | failed | error
   const [message, setMessage] = useState('');
@@ -16,7 +19,21 @@ const PaymentReturn = () => {
   const transactionId = params.get('transactionId');
   const returnedStatus = params.get('status');
 
+  // The payment can only be confirmed for a signed-in passenger. If the
+  // session isn't there, remember this exact address, send them to log in,
+  // and bring them straight back afterwards.
   useEffect(() => {
+    if (authLoading || user) return;
+    try {
+      sessionStorage.setItem('ridematch:afterLogin', window.location.pathname + window.location.search);
+    } catch {
+      // storage unavailable: they will land on Home after logging in
+    }
+    navigate('/login', { replace: true });
+  }, [authLoading, user, navigate]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
     let cancelled = false;
 
     const confirm = async () => {
@@ -36,7 +53,10 @@ const PaymentReturn = () => {
             : { transaction_id: transactionId });
 
           if (result.status === 'held' && result.booking_id) {
-            if (!cancelled) setPhase('done');
+            if (!cancelled) {
+              setBookingId(result.booking_id);
+              setPhase('done');
+            }
             return;
           }
           if (result.status === 'refunded') {
@@ -72,13 +92,13 @@ const PaymentReturn = () => {
 
     confirm();
     return () => { cancelled = true; };
-  }, [reference, transactionId, returnedStatus]);
+  }, [authLoading, user, reference, transactionId, returnedStatus]);
 
   useEffect(() => {
     if (phase !== 'done') return;
-    const t = setTimeout(() => navigate('/bookings', { replace: true }), 2500);
+    const t = setTimeout(() => navigate('/bookings', { replace: true, state: { highlightBookingId: bookingId } }), 2000);
     return () => clearTimeout(t);
-  }, [phase, navigate]);
+  }, [phase, bookingId, navigate]);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-white h-screen p-6 text-center gap-4">

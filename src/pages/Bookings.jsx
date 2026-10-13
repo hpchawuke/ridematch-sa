@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaCalendarDays, FaLocationDot, FaClock,
   FaShieldHalved, FaTriangleExclamation, FaChevronDown, FaChevronUp, FaClockRotateLeft, FaCircleXmark
@@ -37,6 +37,8 @@ function writeSeen(userId, ids) {
 
 const Bookings = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const highlightId = location.state?.highlightBookingId || null;
   const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -181,7 +183,7 @@ const Bookings = () => {
               </div>
             )}
             {active.map((b) => (
-              <BookingCard key={b.id} booking={b} onChanged={fetchBookings} />
+              <BookingCard key={b.id} booking={b} onChanged={fetchBookings} highlight={b.id === highlightId} />
             ))}
           </div>
         )}
@@ -253,8 +255,16 @@ function departureOf(b, payment) {
   return new Date(`${b.date}T${String(b.time).slice(0, 5)}:00+02:00`).getTime();
 }
 
-function BookingCard({ booking: b, onChanged }) {
+function BookingCard({ booking: b, onChanged, highlight = false }) {
   const navigate = useNavigate();
+  const cardRef = React.useRef(null);
+
+  // A trip the passenger has just paid for: scroll to it and outline it
+  useEffect(() => {
+    if (highlight && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlight]);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
 
@@ -307,7 +317,13 @@ function BookingCard({ booking: b, onChanged }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-5">
+    <div
+      ref={cardRef}
+      className={`bg-white rounded-2xl shadow-sm p-5 ${highlight ? 'ring-2 ring-[#0A7B44]' : ''}`}
+    >
+      {highlight && (
+        <p className="text-xs font-semibold text-[#0A7B44] mb-2">Payment received · seat requested</p>
+      )}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
           <FaLocationDot className="text-[#0A7B44]" />

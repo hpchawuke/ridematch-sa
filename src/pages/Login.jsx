@@ -24,7 +24,17 @@ const Login = () => {
       if (signInError) throw signInError;
 
       console.log("Logged in:", data.user.email);
-      navigate('/home');
+      // Coming back from a payment (or any page that needed a login)?
+      // Go there instead of Home.
+      let next = '/home';
+      try {
+        const saved = sessionStorage.getItem('ridematch:afterLogin');
+        if (saved && saved.startsWith('/')) next = saved;
+        sessionStorage.removeItem('ridematch:afterLogin');
+      } catch {
+        // storage unavailable: fall back to Home
+      }
+      navigate(next, { replace: true });
     } catch (err) {
       console.error("Login error:", err.message);
 
