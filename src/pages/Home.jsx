@@ -9,6 +9,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import AvailableTrips from '../components/AvailableTrips';
 import VerificationModal from '../components/VerificationModal';
+import InstallPrompt from '../components/InstallPrompt';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -64,6 +65,7 @@ const Home = () => {
             <div className="text-center flex-1">
               <p className="text-xs text-green-100">Welcome back, {isDriver ? 'driver' : 'passenger'}</p>
               <h1 className="text-xl font-bold">{firstName} 👋</h1>
+              <InstallPrompt />
             </div>
             <div className="flex items-center gap-2">
               {isAdmin && (
